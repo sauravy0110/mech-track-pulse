@@ -6,3 +6,8 @@ verify_jwt = true
 
 [functions.voice-to-text]
 verify_jwt = true
+
+# Disable email confirmation to allow immediate demo logins
+[auth]
+disable_signup = false
+enable_confirmations = false

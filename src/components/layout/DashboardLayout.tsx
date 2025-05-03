@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +29,7 @@ import {
 } from "lucide-react";
 import { UserRole } from "@/context/AuthContext";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -113,8 +113,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     <div className="flex h-screen overflow-hidden bg-background dark:bg-gray-900">
       {/* Sidebar for large screens */}
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-center h-16 border-b border-gray-200 dark:border-gray-700 px-6">
-          <h1 className="text-xl font-bold text-white">MechTrackPulse</h1>
+        <div className="flex flex-col items-center justify-center h-32 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
+          <div className="w-36">
+            <AspectRatio ratio={1/1}>
+              <img 
+                src="/lovable-uploads/9a448ba5-2908-46a7-be3f-710f6ab8cdc4.png" 
+                alt="MechTrackPulse Logo" 
+                className="w-full h-full object-contain"
+              />
+            </AspectRatio>
+          </div>
         </div>
         <div className="flex flex-col flex-1 overflow-y-auto pt-5 pb-4">
           <nav className="flex-1 px-3 space-y-1">
@@ -187,7 +195,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         )}
       >
         <div className="flex items-center justify-between h-16 border-b border-gray-200 dark:border-gray-700 px-6">
-          <h1 className="text-xl font-bold text-white">MechTrackPulse</h1>
+          <div className="w-36">
+            <img 
+              src="/lovable-uploads/9a448ba5-2908-46a7-be3f-710f6ab8cdc4.png" 
+              alt="MechTrackPulse Logo" 
+              className="w-full h-full object-contain"
+            />
+          </div>
           <Button 
             variant="ghost" 
             size="icon" 

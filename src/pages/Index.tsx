@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/context/AuthContext";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 const Index = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -35,40 +36,35 @@ const Index = () => {
     const demoPassword = "demo12345";
     
     try {
-      // Check if user exists - we can't use the admin API from client side
-      // so we'll just try to sign in directly
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      // Try to create the user first instead of checking if it exists
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: demoEmail,
-        password: demoPassword
+        password: demoPassword,
+        options: {
+          data: {
+            name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
+            role: role,
+          }
+        }
       });
       
-      if (signInError) {
-        // User doesn't exist, create it
-        const { data, error } = await supabase.auth.signUp({
+      // If the user already exists, sign in instead
+      if (signUpError && signUpError.message.includes("already registered")) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: demoEmail,
-          password: demoPassword,
-          options: {
-            data: {
-              name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
-              role: role,
-            }
-          }
+          password: demoPassword
         });
         
-        if (error) throw error;
-        
-        // Display a toast to inform the user
-        toast({
-          title: "Demo Mode",
-          description: `Using the application in ${role} demo mode.`,
-        });
-      } else {
-        // User exists and we're logged in
-        toast({
-          title: "Demo Mode",
-          description: `Using the application in ${role} demo mode.`,
-        });
+        if (signInError) throw signInError;
+      } else if (signUpError) {
+        throw signUpError;
       }
+      
+      // Display a toast to inform the user
+      toast({
+        title: "Demo Mode",
+        description: `Using the application in ${role} demo mode.`,
+      });
       
       navigate("/dashboard");
     } catch (error: any) {
@@ -85,7 +81,20 @@ const Index = () => {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-mechanical-800 to-mechanical-600">
       <header className="p-6">
         <div className="container mx-auto">
-          <h1 className="text-3xl font-bold text-white">MechTrackPulse</h1>
+          <div className="flex flex-col items-center">
+            <div className="w-64 mb-4">
+              <AspectRatio ratio={1/1}>
+                <img 
+                  src="/lovable-uploads/9a448ba5-2908-46a7-be3f-710f6ab8cdc4.png" 
+                  alt="MechTrackPulse Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </AspectRatio>
+            </div>
+            <div className="text-center text-white">
+              <p className="text-xl">Precision. Progress. Performance.</p>
+            </div>
+          </div>
         </div>
       </header>
       
