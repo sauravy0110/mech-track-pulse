@@ -4,12 +4,20 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Task } from "@/utils/mockData";
 import { Calendar, Clock } from "lucide-react";
 import TaskUpdateButton from "./TaskUpdateButton";
+import WorkUpdateButton from "./WorkUpdateButton";
+import ViewWorkUpdatesButton from "./ViewWorkUpdatesButton";
+import { useAuth } from "@/hooks/useAuth";
 
 interface TaskCardProps {
   task: Task;
 }
 
 const TaskCard = ({ task }: TaskCardProps) => {
+  const { isRole, user } = useAuth();
+  const isOperator = isRole("operator");
+  const isAssignedToCurrentUser = user && task.assignedTo && task.assignedTo.id === user.id;
+  const isSupervisor = isRole(["supervisor", "owner"]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -71,7 +79,7 @@ const TaskCard = ({ task }: TaskCardProps) => {
         </div>
       </CardContent>
       
-      <CardFooter className="px-4 py-3 border-t flex justify-between">
+      <CardFooter className="px-4 py-3 border-t flex justify-between flex-wrap gap-2">
         <div className="text-sm">
           {task.assignedTo ? (
             <span>Assigned to: {task.assignedTo.name}</span>
@@ -79,7 +87,19 @@ const TaskCard = ({ task }: TaskCardProps) => {
             <span className="text-muted-foreground italic">Unassigned</span>
           )}
         </div>
-        <TaskUpdateButton taskId={task.id} taskTitle={task.title} />
+        <div className="flex gap-2 flex-wrap">
+          {/* Show work update button for operators assigned to this task */}
+          {isOperator && isAssignedToCurrentUser && (
+            <WorkUpdateButton taskId={task.id} taskTitle={task.title} />
+          )}
+          
+          {/* Show view work updates button for supervisors */}
+          {isSupervisor && (
+            <ViewWorkUpdatesButton taskId={task.id} taskTitle={task.title} />
+          )}
+          
+          <TaskUpdateButton taskId={task.id} taskTitle={task.title} />
+        </div>
       </CardFooter>
     </Card>
   );

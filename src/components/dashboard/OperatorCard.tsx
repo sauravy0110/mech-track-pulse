@@ -35,8 +35,10 @@ const OperatorCard = ({ operator }: OperatorCardProps) => {
         <div className="flex justify-between items-start">
           <div className="flex items-center">
             <Avatar className="h-12 w-12 mr-3">
-              <AvatarImage src={operator.profileImage} />
-              <AvatarFallback className="bg-primary">
+              {operator.profileImage ? (
+                <AvatarImage src={operator.profileImage} alt={operator.name} />
+              ) : null}
+              <AvatarFallback className="bg-primary text-primary-foreground">
                 {getInitials(operator.name)}
               </AvatarFallback>
             </Avatar>

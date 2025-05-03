@@ -187,6 +187,73 @@ export type Database = {
           },
         ]
       }
+      work_updates: {
+        Row: {
+          comment: string | null
+          id: string
+          image_url: string
+          operator_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          submitted_at: string | null
+          supervisor_audio: string | null
+          supervisor_feedback: string | null
+          supervisor_image: string | null
+          task_id: string | null
+        }
+        Insert: {
+          comment?: string | null
+          id?: string
+          image_url: string
+          operator_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          supervisor_audio?: string | null
+          supervisor_feedback?: string | null
+          supervisor_image?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          comment?: string | null
+          id?: string
+          image_url?: string
+          operator_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          supervisor_audio?: string | null
+          supervisor_feedback?: string | null
+          supervisor_image?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_updates_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_updates_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_updates_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
