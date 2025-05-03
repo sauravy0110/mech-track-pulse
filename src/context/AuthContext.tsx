@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +11,7 @@ export interface User {
   email: string;
   role: UserRole;
   profileImage?: string;
+  isDemo?: boolean; // Added for demo user support
 }
 
 interface AuthContextType {
@@ -19,10 +19,12 @@ interface AuthContextType {
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isDemo: boolean; // Added for demo mode
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
-  isRole: (role: UserRole | UserRole[]) => boolean;
+  setDemoUser: (role: UserRole) => void; // Added for setting demo user
+  clearDemoUser: () => void; // Added for clearing demo user
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -30,10 +32,12 @@ export const AuthContext = createContext<AuthContextType>({
   session: null,
   isAuthenticated: false,
   isLoading: true,
+  isDemo: false,
   login: async () => {},
   logout: async () => {},
   register: async () => {},
-  isRole: () => false,
+  setDemoUser: () => {},
+  clearDemoUser: () => {},
 });
 
 interface AuthProviderProps {
@@ -44,75 +48,84 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
+
+  // Check for demo mode on component mount
+  useEffect(() => {
+    const demoRole = localStorage.getItem('mtp-demo-role');
+    if (demoRole) {
+      // If we have a demo role stored, set up a demo user
+      setDemoUser(demoRole as UserRole);
+    } else {
+      // Otherwise, initialize regular auth
+      initializeAuth();
+    }
+  }, []);
 
   // Set up auth state listener and check for existing session
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // Set up auth state listener first
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, currentSession) => {
-            setSession(currentSession);
+  const initializeAuth = async () => {
+    try {
+      // Set up auth state listener first
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, currentSession) => {
+          setSession(currentSession);
+          
+          if (currentSession?.user) {
+            // Don't fetch user profile here, just update basic user info
+            const supaUser = currentSession.user;
             
-            if (currentSession?.user) {
-              // Don't fetch user profile here, just update basic user info
-              const supaUser = currentSession.user;
-              
-              // Check for metadata with name and role
-              const metadata = supaUser.user_metadata || {};
-              
-              setUser({
-                id: supaUser.id,
-                name: metadata.name || supaUser.email?.split('@')[0] || 'User',
-                email: supaUser.email || '',
-                role: (metadata.role as UserRole) || 'operator',
-                profileImage: metadata.profile_image,
-              });
-              
-              // Defer additional data fetching
-              setTimeout(() => {
-                fetchUserProfile(supaUser);
-              }, 0);
-            } else {
-              setUser(null);
-            }
+            // Check for metadata with name and role
+            const metadata = supaUser.user_metadata || {};
+            
+            setUser({
+              id: supaUser.id,
+              name: metadata.name || supaUser.email?.split('@')[0] || 'User',
+              email: supaUser.email || '',
+              role: (metadata.role as UserRole) || 'operator',
+              profileImage: metadata.profile_image,
+            });
+            
+            // Defer additional data fetching
+            setTimeout(() => {
+              fetchUserProfile(supaUser);
+            }, 0);
+          } else {
+            setUser(null);
           }
-        );
-
-        // Check for existing session
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
-        setSession(existingSession);
-
-        if (existingSession?.user) {
-          // Update user state with basic info from session
-          const supaUser = existingSession.user;
-          const metadata = supaUser.user_metadata || {};
-          
-          setUser({
-            id: supaUser.id,
-            name: metadata.name || supaUser.email?.split('@')[0] || 'User',
-            email: supaUser.email || '',
-            role: (metadata.role as UserRole) || 'operator',
-            profileImage: metadata.profile_image,
-          });
-          
-          // Fetch complete user profile
-          await fetchUserProfile(supaUser);
         }
+      );
 
-        setIsLoading(false);
+      // Check for existing session
+      const { data: { session: existingSession } } = await supabase.auth.getSession();
+      setSession(existingSession);
+
+      if (existingSession?.user) {
+        // Update user state with basic info from session
+        const supaUser = existingSession.user;
+        const metadata = supaUser.user_metadata || {};
         
-        return () => {
-          subscription.unsubscribe();
-        };
-      } catch (error) {
-        console.error("Error initializing auth:", error);
-        setIsLoading(false);
+        setUser({
+          id: supaUser.id,
+          name: metadata.name || supaUser.email?.split('@')[0] || 'User',
+          email: supaUser.email || '',
+          role: (metadata.role as UserRole) || 'operator',
+          profileImage: metadata.profile_image,
+        });
+        
+        // Fetch complete user profile
+        await fetchUserProfile(supaUser);
       }
-    };
 
-    initializeAuth();
-  }, []);
+      setIsLoading(false);
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch (error) {
+      console.error("Error initializing auth:", error);
+      setIsLoading(false);
+    }
+  };
   
   // Separate function to fetch user profile data
   const fetchUserProfile = async (supaUser: SupabaseUser) => {
@@ -140,6 +153,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
     }
+  };
+
+  // Create a demo user without authentication
+  const setDemoUser = (role: UserRole) => {
+    const demoUser: User = {
+      id: `demo-${role}-${Date.now()}`,
+      name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
+      email: `demo-${role}@mechtrackpulse.com`,
+      role: role,
+      isDemo: true
+    };
+    
+    setUser(demoUser);
+    setIsDemo(true);
+    setIsLoading(false);
+    localStorage.setItem('mtp-demo-role', role);
+  };
+  
+  // Clear the demo user
+  const clearDemoUser = () => {
+    setUser(null);
+    setIsDemo(false);
+    localStorage.removeItem('mtp-demo-role');
+    initializeAuth();
   };
 
   const login = async (email: string, password: string, role: UserRole) => {
@@ -297,10 +334,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         session,
         isAuthenticated: !!user,
         isLoading,
+        isDemo,
         login,
         logout,
         register,
-        isRole,
+        setDemoUser,
+        clearDemoUser,
       }}
     >
       {children}

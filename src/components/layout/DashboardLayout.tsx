@@ -35,13 +35,17 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const { user, logout, isRole } = useAuth();
+  const { user, logout, isRole, clearDemoUser, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const handleLogout = () => {
-    logout();
+    if (isDemo) {
+      clearDemoUser();
+    } else {
+      logout();
+    }
     navigate('/');
   };
 
@@ -112,14 +116,12 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar for large screens */}
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-gray-200">
-        <div className="flex flex-col items-center justify-center h-32 border-b border-gray-200 px-6 py-3">
-          <div className="w-36 h-36 flex items-center justify-center">
-            <img 
-              src="/lovable-uploads/6d28bdaa-dc4e-49fd-abe0-0cab55db6c87.png" 
-              alt="MechTrackPulse Logo" 
-              className="w-full h-auto object-contain"
-            />
-          </div>
+        <div className="flex items-center h-16 border-b border-gray-200 px-4">
+          <img 
+            src="/lovable-uploads/652b5d11-8b9e-4675-b76c-5f552280f24f.png" 
+            alt="MechTrackPulse Logo" 
+            className="h-12 w-auto"
+          />
         </div>
         <div className="flex flex-col flex-1 overflow-y-auto pt-5 pb-4">
           <nav className="flex-1 px-3 space-y-1">
@@ -160,9 +162,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <p className="text-xs text-sidebar-foreground/70 capitalize">
                 {user?.role}
               </p>
-              <p className="text-xs text-sidebar-foreground/70">
-                ID: {user?.id}
-              </p>
+              {isDemo && (
+                <p className="text-xs text-sidebar-foreground/70 bg-amber-200 text-amber-800 px-1 rounded">
+                  Demo Mode
+                </p>
+              )}
             </div>
           </div>
           <Button 
@@ -171,7 +175,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             className="w-full mt-2 text-sidebar-foreground hover:bg-sidebar-accent/50"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Log out
+            {isDemo ? "Exit Demo" : "Log out"}
           </Button>
         </div>
       </aside>
@@ -191,14 +195,12 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between h-16 border-b border-gray-200 px-6">
-          <div className="w-36 h-16 flex items-center justify-center">
-            <img 
-              src="/lovable-uploads/6d28bdaa-dc4e-49fd-abe0-0cab55db6c87.png" 
-              alt="MechTrackPulse Logo" 
-              className="w-full h-auto object-contain"
-            />
-          </div>
+        <div className="flex items-center justify-between h-16 border-b border-gray-200 px-4">
+          <img 
+            src="/lovable-uploads/652b5d11-8b9e-4675-b76c-5f552280f24f.png" 
+            alt="MechTrackPulse Logo" 
+            className="h-10 w-auto"
+          />
           <Button 
             variant="ghost" 
             size="icon" 
@@ -344,7 +346,14 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                      <DropdownMenuLabel>
+                        My Account
+                        {isDemo && (
+                          <span className="ml-2 bg-amber-200 text-amber-800 text-xs px-1 py-0.5 rounded">
+                            Demo
+                          </span>
+                        )}
+                      </DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/profile')}>
                         <User className="mr-2 h-4 w-4" />
@@ -357,7 +366,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" />
-                        Log out
+                        {isDemo ? "Exit Demo" : "Log out"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

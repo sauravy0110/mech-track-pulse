@@ -7,7 +7,8 @@ verify_jwt = true
 [functions.voice-to-text]
 verify_jwt = true
 
-# Enable email confirmation to prevent multiple logins without verification
+# Disable email confirmation to make demo login easier
 [auth]
 disable_signup = false
-enable_confirmations = true
+enable_confirmations = false
+

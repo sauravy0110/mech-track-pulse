@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/context/AuthContext";
 
 const Index = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, setDemoUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -29,77 +29,30 @@ const Index = () => {
     }
   }, [isAuthenticated, isLoading, navigate, searchParams]);
 
-  const handleDemoLogin = async (role: UserRole) => {
-    // Create a demo email based on role
-    const demoEmail = `demo-${role}@mechtrackpulse.com`;
-    const demoPassword = "demo12345";
+  const handleDemoAccess = (role: UserRole) => {
+    // Set demo user and redirect to dashboard
+    setDemoUser(role);
     
-    try {
-      // Try to sign in with the demo credentials
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: demoEmail,
-        password: demoPassword
-      });
-      
-      if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          // If the user doesn't exist, create a new one
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: demoEmail,
-            password: demoPassword,
-            options: {
-              data: {
-                name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
-                role: role,
-              }
-            }
-          });
-          
-          if (signUpError) throw signUpError;
-          
-          // Display a toast to inform the user about email verification
-          toast({
-            title: "Email Verification Required",
-            description: "Please check your email for verification before logging in.",
-          });
-          
-          return;
-        }
-        
-        throw error;
-      }
-      
-      // Display a toast to inform the user
-      toast({
-        title: "Demo Mode",
-        description: `Using the application in ${role} demo mode.`,
-      });
-      
-      navigate("/dashboard");
-    } catch (error: any) {
-      console.error("Demo login error:", error);
-      toast({
-        title: "Demo Login Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
+    // Display a toast to inform the user
+    toast({
+      title: "Demo Mode Activated",
+      description: `Using the application in ${role} demo mode.`,
+    });
+    
+    navigate("/dashboard");
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-mechanical-800 to-mechanical-600">
-      <header className="p-6">
+      <header className="p-4">
         <div className="container mx-auto">
-          <div className="flex flex-col items-center">
-            <div className="w-64 h-64 flex items-center justify-center mb-4">
+          <div className="flex items-center">
+            <div className="flex items-center">
               <img 
-                src="/lovable-uploads/6d28bdaa-dc4e-49fd-abe0-0cab55db6c87.png" 
+                src="/lovable-uploads/652b5d11-8b9e-4675-b76c-5f552280f24f.png" 
                 alt="MechTrackPulse Logo" 
-                className="w-full h-auto object-contain"
+                className="h-16 w-auto"
               />
-            </div>
-            <div className="text-center text-white">
-              <p className="text-xl">Precision. Progress. Performance.</p>
             </div>
           </div>
         </div>
@@ -115,25 +68,25 @@ const Index = () => {
           </p>
           <div className="flex flex-wrap gap-4">
             <Button 
-              onClick={() => handleDemoLogin("operator")}
+              onClick={() => handleDemoAccess("operator")}
               className="bg-white text-mechanical-800 hover:bg-white/90"
             >
               Operator Demo
             </Button>
             <Button 
-              onClick={() => handleDemoLogin("supervisor")}
+              onClick={() => handleDemoAccess("supervisor")}
               className="bg-white text-mechanical-800 hover:bg-white/90"
             >
               Supervisor Demo
             </Button>
             <Button 
-              onClick={() => handleDemoLogin("client")}
+              onClick={() => handleDemoAccess("client")}
               className="bg-white text-mechanical-800 hover:bg-white/90"
             >
               Client Demo
             </Button>
             <Button 
-              onClick={() => handleDemoLogin("owner")}
+              onClick={() => handleDemoAccess("owner")}
               className="bg-white text-mechanical-800 hover:bg-white/90"
             >
               Owner Demo
