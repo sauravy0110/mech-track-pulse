@@ -1,0 +1,8 @@
+
+project_id = "djbdylsdanytgrdqhpzo"
+
+[functions.ai-chat-assistant]
+verify_jwt = true
+
+[functions.voice-to-text]
+verify_jwt = true
