@@ -14,6 +14,7 @@ interface TaskUpdateButtonProps {
 
 const TaskUpdateButton = ({ taskId, taskTitle }: TaskUpdateButtonProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -23,36 +24,47 @@ const TaskUpdateButton = ({ taskId, taskTitle }: TaskUpdateButtonProps) => {
         throw new Error("You must be logged in to submit updates");
       }
 
-      // In a real app, this would call an API to update the task
+      setIsSubmitting(true);
       console.log("Submitting task update:", { taskId, updateText });
       
-      // Create a record in a task_updates table in Supabase
+      // Create a record in the work_updates table in Supabase
+      // This table already exists in the database schema
       const { data, error } = await supabase
-        .from("task_updates")
+        .from("work_updates")
         .insert({
           task_id: taskId,
-          user_id: user.id,
-          update_text: updateText,
-          created_at: new Date().toISOString()
+          operator_id: user.id,
+          comment: updateText,         // Using 'comment' field which exists in work_updates
+          image_url: "",               // This field is required but we'll use an empty string
+          submitted_at: new Date().toISOString()
         })
         .select();
         
       if (error) {
         console.error("Supabase error:", error);
-        if (error.code === "42P01") { // Relation does not exist
-          console.log("Task updates table doesn't exist yet, simulating success for demo");
-          // Simulate success for demo purposes since table may not exist
-          await new Promise(resolve => setTimeout(resolve, 500));
-          return;
-        }
         throw error;
       }
       
       console.log("Task update saved:", data);
+      
+      toast({
+        title: "Update added",
+        description: "Your task update has been saved successfully",
+      });
+      
       return Promise.resolve();
     } catch (error) {
       console.error("Error submitting task update:", error);
+      
+      toast({
+        title: "Update failed",
+        description: "Failed to save your task update. Please try again.",
+        variant: "destructive",
+      });
+      
       return Promise.reject(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
