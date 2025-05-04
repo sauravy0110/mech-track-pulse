@@ -21,7 +21,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { generatePassword } from "@/utils/password";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, FileText, Upload } from "lucide-react";
+import { parseResumeWithOCR } from "@/utils/resumeParser";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// Array of manufacturing departments
+const manufacturingDepartments = [
+  { id: "production", label: "Production / Manufacturing" },
+  { id: "quality", label: "Quality Control / Quality Assurance" },
+  { id: "maintenance", label: "Maintenance / Engineering" },
+  { id: "design", label: "Design / R&D" },
+  { id: "supply_chain", label: "Supply Chain / Logistics" },
+  { id: "planning", label: "Planning / Scheduling" },
+  { id: "hse", label: "Health, Safety, and Environment" },
+  { id: "hr", label: "Human Resources" },
+  { id: "finance", label: "Finance / Accounts" },
+  { id: "sales", label: "Sales & Marketing" },
+  { id: "it", label: "IT / Automation / Digital Transformation" },
+  { id: "support", label: "Customer Support / After-Sales Service" }
+];
 
 // Define an extended profile type with all the fields we need
 interface ExtendedProfile {
@@ -39,6 +57,8 @@ interface ExtendedProfile {
   notes?: string | null;
   status?: string | null;
   role: string;
+  skills?: string | null;
+  department?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +76,8 @@ const staffSchema = z.object({
   certifications: z.string().optional(),
   notes: z.string().optional(),
   status: z.enum(["online", "offline", "away"]).default("offline"),
+  department: z.string().optional(),
+  skills: z.string().optional(),
 });
 
 type StaffFormValues = z.infer<typeof staffSchema>;
@@ -75,8 +97,11 @@ const OperatorDetailsForm = ({
 }: OperatorDetailsFormProps) => {
   const [loading, setLoading] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeProcessing, setResumeProcessing] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const { toast } = useToast();
   
   const form = useForm<StaffFormValues>({
@@ -93,6 +118,8 @@ const OperatorDetailsForm = ({
       certifications: "",
       notes: "",
       status: "offline",
+      department: "",
+      skills: "",
     },
   });
 
@@ -158,10 +185,16 @@ const OperatorDetailsForm = ({
           certifications: profile.certifications || "",
           notes: profile.notes || "",
           status: (profile.status as any) || "offline",
+          department: profile.department || "",
+          skills: profile.skills || "",
         });
 
         if (profile.profile_image) {
           setImagePreview(profile.profile_image);
+        }
+        
+        if (profile.department) {
+          setSelectedDepartments(profile.department.split(","));
         }
       }
     } catch (error) {
@@ -185,6 +218,37 @@ const OperatorDetailsForm = ({
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setResumeFile(file);
+      setResumeProcessing(true);
+      
+      try {
+        // Process the resume with OCR
+        const extractedSkills = await parseResumeWithOCR(file);
+        
+        // Update the skills field with extracted content
+        if (extractedSkills) {
+          form.setValue("skills", extractedSkills);
+          toast({
+            title: "Skills extracted",
+            description: "Skills were successfully extracted from your resume",
+          });
+        }
+      } catch (error) {
+        console.error("Error processing resume:", error);
+        toast({
+          title: "OCR processing error",
+          description: "Could not extract skills from the resume. Please enter them manually.",
+          variant: "destructive",
+        });
+      } finally {
+        setResumeProcessing(false);
+      }
     }
   };
 
@@ -211,11 +275,39 @@ const OperatorDetailsForm = ({
       return null;
     }
   };
+  
+  const uploadResumeFile = async (userId: string): Promise<string | null> => {
+    if (!resumeFile) return null;
+    
+    try {
+      const fileExt = resumeFile.name.split('.').pop();
+      const filePath = `${userId}/resume.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, resumeFile, { upsert: true });
+        
+      if (uploadError) throw uploadError;
+      
+      const { data } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error("Error uploading resume:", error);
+      return null;
+    }
+  };
 
   const onSubmit = async (values: StaffFormValues) => {
     setLoading(true);
     try {
       let profileImageUrl = null;
+      let resumeFileUrl = null;
+
+      // Format selected departments as comma-separated string
+      const departmentsString = selectedDepartments.join(",");
 
       // First, check email availability
       if (!isEdit && !(await checkEmailAvailability(values.email))) {
@@ -250,6 +342,11 @@ const OperatorDetailsForm = ({
           if (profileImage) {
             profileImageUrl = await uploadProfileImage(userId);
           }
+          
+          // Upload resume if selected
+          if (resumeFile) {
+            resumeFileUrl = await uploadResumeFile(userId);
+          }
 
           // Update the profile with additional information
           const { error: updateError } = await supabase
@@ -267,6 +364,8 @@ const OperatorDetailsForm = ({
               certifications: values.certifications,
               notes: values.notes,
               status: values.status,
+              department: departmentsString,
+              skills: values.skills,
               role: roleType, // Make sure role is correctly set
             })
             .eq("id", userId);
@@ -283,6 +382,11 @@ const OperatorDetailsForm = ({
         // Upload new profile image if selected
         if (profileImage) {
           profileImageUrl = await uploadProfileImage(operatorId);
+        }
+        
+        // Upload resume if selected
+        if (resumeFile) {
+          resumeFileUrl = await uploadResumeFile(operatorId);
         }
 
         // Update profile with new information
@@ -301,6 +405,8 @@ const OperatorDetailsForm = ({
             certifications: values.certifications,
             notes: values.notes,
             status: values.status,
+            department: departmentsString,
+            skills: values.skills,
           })
           .eq("id", operatorId);
 
@@ -325,6 +431,17 @@ const OperatorDetailsForm = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Toggle department selection
+  const toggleDepartment = (departmentId: string) => {
+    setSelectedDepartments(prev => {
+      if (prev.includes(departmentId)) {
+        return prev.filter(id => id !== departmentId);
+      } else {
+        return [...prev, departmentId];
+      }
+    });
   };
 
   // Validate email when it changes
@@ -511,6 +628,88 @@ const OperatorDetailsForm = ({
             )}
           />
         </div>
+
+        {/* Department Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Department</h3>
+          <p className="text-sm text-muted-foreground">
+            Select the department(s) this {roleType} will be working in
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {manufacturingDepartments.map(department => (
+              <div className="flex items-center space-x-2" key={department.id}>
+                <Checkbox 
+                  id={`department-${department.id}`}
+                  checked={selectedDepartments.includes(department.id)}
+                  onCheckedChange={() => toggleDepartment(department.id)}
+                />
+                <label 
+                  htmlFor={`department-${department.id}`}
+                  className="text-sm cursor-pointer"
+                >
+                  {department.label}
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Resume Upload Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Resume Upload</h3>
+          <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <div className="flex flex-col items-center">
+              <FileText className="h-10 w-10 text-gray-400 mb-2" />
+              <p className="mb-2 text-sm text-gray-500">
+                Upload a resume to automatically extract skills
+              </p>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => document.getElementById('resume-upload')?.click()}
+                disabled={resumeProcessing}
+              >
+                <Upload className="mr-2 h-4 w-4" /> 
+                {resumeProcessing ? "Processing..." : "Upload Resume"}
+              </Button>
+              <input
+                id="resume-upload"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleResumeUpload}
+                className="hidden"
+              />
+              {resumeFile && (
+                <p className="mt-2 text-sm text-gray-500">
+                  File selected: {resumeFile.name}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Skills Section */}
+        <FormField
+          control={form.control}
+          name="skills"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Skills</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Enter skills separated by commas (e.g. Welding, CNC Operation, Quality Inspection)" 
+                  {...field}
+                  className="min-h-[120px]" 
+                />
+              </FormControl>
+              <FormDescription>
+                List all relevant skills separated by commas. These will be used for task assignment.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
