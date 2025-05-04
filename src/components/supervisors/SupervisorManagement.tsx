@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChevronDown, Phone, MessageSquare, UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+
+// Define extended profile type with all the fields we need
+interface ExtendedProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  profile_image?: string | null;
+  status?: string | null;
+  on_holiday?: boolean | null;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface SupervisorType {
   id: string;
@@ -74,7 +87,10 @@ const SupervisorManagement = () => {
       if (error) throw error;
       
       // Transform data and add mock performance metrics
-      const supervisorsWithMetrics = data.map((supervisor: any) => ({
+      // Use type assertion to treat the data as an array of extended profiles
+      const profileData = data as ExtendedProfile[];
+      
+      const supervisorsWithMetrics = profileData.map((supervisor) => ({
         ...supervisor,
         onHoliday: supervisor.on_holiday || false,
         performance: {
@@ -85,7 +101,7 @@ const SupervisorManagement = () => {
         }
       }));
       
-      setSupervisors(supervisorsWithMetrics);
+      setSupervisors(supervisorsWithMetrics as SupervisorType[]);
     } catch (error) {
       console.error("Error fetching supervisors:", error);
       toast({

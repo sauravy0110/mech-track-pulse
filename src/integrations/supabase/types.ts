@@ -62,31 +62,61 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
+          certifications: string | null
           created_at: string
           email: string
+          emergency_contact: string | null
+          height: string | null
           id: string
           name: string
+          notes: string | null
+          on_holiday: boolean | null
+          phone: string | null
           profile_image: string | null
+          qualifications: string | null
           role: string
+          status: string | null
           updated_at: string
+          weight: string | null
         }
         Insert: {
+          address?: string | null
+          certifications?: string | null
           created_at?: string
           email: string
+          emergency_contact?: string | null
+          height?: string | null
           id: string
           name: string
+          notes?: string | null
+          on_holiday?: boolean | null
+          phone?: string | null
           profile_image?: string | null
+          qualifications?: string | null
           role: string
+          status?: string | null
           updated_at?: string
+          weight?: string | null
         }
         Update: {
+          address?: string | null
+          certifications?: string | null
           created_at?: string
           email?: string
+          emergency_contact?: string | null
+          height?: string | null
           id?: string
           name?: string
+          notes?: string | null
+          on_holiday?: boolean | null
+          phone?: string | null
           profile_image?: string | null
+          qualifications?: string | null
           role?: string
+          status?: string | null
           updated_at?: string
+          weight?: string | null
         }
         Relationships: []
       }

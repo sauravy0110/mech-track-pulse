@@ -20,6 +20,26 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+// Define an extended profile type with all the fields we need
+interface ExtendedProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  profile_image?: string | null;
+  height?: string | null;
+  weight?: string | null;
+  emergency_contact?: string | null;
+  address?: string | null;
+  qualifications?: string | null;
+  certifications?: string | null;
+  notes?: string | null;
+  status?: string | null;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Define schema for operator details
 const operatorSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -85,22 +105,25 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
       if (error) throw error;
 
       if (data) {
+        // Use type assertion to treat the data as our extended profile type
+        const profile = data as ExtendedProfile;
+        
         form.reset({
-          name: data.name,
-          email: data.email,
-          phone: data.phone || "",
-          height: data.height || "",
-          weight: data.weight || "",
-          emergencyContact: data.emergency_contact || "",
-          address: data.address || "",
-          qualifications: data.qualifications || "",
-          certifications: data.certifications || "",
-          notes: data.notes || "",
-          status: data.status as any || "offline",
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone || "",
+          height: profile.height || "",
+          weight: profile.weight || "",
+          emergencyContact: profile.emergency_contact || "",
+          address: profile.address || "",
+          qualifications: profile.qualifications || "",
+          certifications: profile.certifications || "",
+          notes: profile.notes || "",
+          status: (profile.status as any) || "offline",
         });
 
-        if (data.profile_image) {
-          setImagePreview(data.profile_image);
+        if (profile.profile_image) {
+          setImagePreview(profile.profile_image);
         }
       }
     } catch (error) {
@@ -108,6 +131,139 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
       toast({
         title: "Error",
         description: "Failed to load operator details",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setProfileImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadProfileImage = async (userId: string): Promise<string | null> => {
+    if (!profileImage) return null;
+    
+    try {
+      const fileExt = profileImage.name.split('.').pop();
+      const filePath = `${userId}/profile-image.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, profileImage, { upsert: true });
+        
+      if (uploadError) throw uploadError;
+      
+      const { data } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error("Error uploading profile image:", error);
+      return null;
+    }
+  };
+
+  const onSubmit = async (values: OperatorFormValues) => {
+    setLoading(true);
+    try {
+      let profileImageUrl = null;
+
+      // Create new operator if not editing
+      if (!isEdit) {
+        // Creating a new user with authentication
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: values.email,
+          password: "tempPassword123", // This should be randomly generated or requested
+          options: {
+            data: {
+              name: values.name,
+              role: "operator",
+            },
+          },
+        });
+
+        if (authError) throw authError;
+
+        if (authData.user) {
+          const userId = authData.user.id;
+
+          // Upload profile image if selected
+          if (profileImage) {
+            profileImageUrl = await uploadProfileImage(userId);
+          }
+
+          // Update the profile with additional information
+          const { error: updateError } = await supabase
+            .from("profiles")
+            .update({
+              name: values.name,
+              email: values.email,
+              phone: values.phone,
+              profile_image: profileImageUrl,
+              height: values.height,
+              weight: values.weight,
+              emergency_contact: values.emergencyContact,
+              address: values.address,
+              qualifications: values.qualifications,
+              certifications: values.certifications,
+              notes: values.notes,
+              status: values.status,
+            })
+            .eq("id", userId);
+
+          if (updateError) throw updateError;
+        }
+      } else if (operatorId) {
+        // Update existing operator
+        // Upload new profile image if selected
+        if (profileImage) {
+          profileImageUrl = await uploadProfileImage(operatorId);
+        }
+
+        // Update profile with new information
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            name: values.name,
+            email: values.email,
+            phone: values.phone,
+            profile_image: profileImageUrl || undefined, // Only update if new image uploaded
+            height: values.height,
+            weight: values.weight,
+            emergency_contact: values.emergencyContact,
+            address: values.address,
+            qualifications: values.qualifications,
+            certifications: values.certifications,
+            notes: values.notes,
+            status: values.status,
+          })
+          .eq("id", operatorId);
+
+        if (updateError) throw updateError;
+      }
+
+      toast({
+        title: "Success",
+        description: isEdit ? "Operator updated successfully" : "New operator added successfully",
+      });
+
+      if (onSuccess) onSuccess();
+    } catch (error: any) {
+      console.error("Error saving operator:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save operator details",
         variant: "destructive",
       });
     } finally {
