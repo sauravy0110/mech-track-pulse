@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge"; // Import Badge component
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,9 +34,7 @@ interface WorkUpdate {
   submitted_at: string;
   status: 'pending' | 'approved' | 'rejected';
   supervisor_feedback: string | null;
-  operator: {
-    name: string;
-  } | null;
+  operator_name: string | null; // Simplified to just store the name
 }
 
 const WorkUpdatesDrawer = ({
@@ -61,7 +60,8 @@ const WorkUpdatesDrawer = ({
   const fetchWorkUpdates = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // First, get all work updates for this task
+      const { data: updates, error: updatesError } = await supabase
         .from("work_updates")
         .select(`
           id, 
@@ -70,21 +70,40 @@ const WorkUpdatesDrawer = ({
           comment, 
           submitted_at, 
           status, 
-          supervisor_feedback,
-          profiles:operator_id (name)
+          supervisor_feedback
         `)
         .eq("task_id", taskId)
         .order("submitted_at", { ascending: false });
 
-      if (error) throw error;
+      if (updatesError) throw updatesError;
       
-      // Map the data to include operator name directly
-      const updatesWithOperator = data.map(update => ({
-        ...update,
-        operator: update.profiles,
-      }));
+      // For each update, get the operator name from the profiles table
+      const updatesWithOperatorNames = await Promise.all(
+        updates.map(async (update) => {
+          const { data: operatorData, error: operatorError } = await supabase
+            .from("profiles")
+            .select("name")
+            .eq("id", update.operator_id)
+            .single();
+
+          if (operatorError) {
+            console.error("Error fetching operator name:", operatorError);
+            return {
+              ...update,
+              operator_name: null,
+              status: update.status as 'pending' | 'approved' | 'rejected'
+            };
+          }
+
+          return {
+            ...update,
+            operator_name: operatorData?.name || null,
+            status: update.status as 'pending' | 'approved' | 'rejected'
+          };
+        })
+      );
       
-      setWorkUpdates(updatesWithOperator);
+      setWorkUpdates(updatesWithOperatorNames);
     } catch (error) {
       console.error("Error fetching work updates:", error);
       toast({
@@ -168,7 +187,7 @@ const WorkUpdatesDrawer = ({
                   <div className="p-3 bg-muted/30 border-b flex justify-between items-center">
                     <div>
                       <span className="font-medium">
-                        {update.operator?.name || "Unknown Operator"}
+                        {update.operator_name || "Unknown Operator"}
                       </span>
                       <p className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(update.submitted_at), { addSuffix: true })}
@@ -176,11 +195,11 @@ const WorkUpdatesDrawer = ({
                     </div>
                     <div>
                       {update.status === 'pending' ? (
-                        <Badge variant="outline" className="bg-yellow-500">Pending</Badge>
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">Pending</Badge>
                       ) : update.status === 'approved' ? (
-                        <Badge variant="outline" className="bg-green-500">Approved</Badge>
+                        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">Approved</Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-red-500">Rejected</Badge>
+                        <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Rejected</Badge>
                       )}
                     </div>
                   </div>
