@@ -11,3 +11,7 @@ verify_jwt = true
 [auth]
 disable_signup = false
 enable_confirmations = true
+
+# Make sure storage buckets are properly configured
+[storage]
+file_size_limit = "50MiB"
