@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge"; // Import Badge component
+import { Badge } from "@/components/ui/badge"; 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,7 +34,7 @@ interface WorkUpdate {
   submitted_at: string;
   status: 'pending' | 'approved' | 'rejected';
   supervisor_feedback: string | null;
-  operator_name: string | null; // Simplified to just store the name
+  operator_name: string | null; 
 }
 
 const WorkUpdatesDrawer = ({
@@ -47,6 +47,7 @@ const WorkUpdatesDrawer = ({
   const { toast } = useToast();
   const [workUpdates, setWorkUpdates] = useState<WorkUpdate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [selectedUpdate, setSelectedUpdate] = useState<string | null>(null);
@@ -57,9 +58,37 @@ const WorkUpdatesDrawer = ({
     }
   }, [isOpen, taskId]);
 
+  // Set up realtime subscription for work updates
+  useEffect(() => {
+    if (!taskId) return;
+    
+    const channel = supabase
+      .channel('work-updates-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'work_updates',
+          filter: `task_id=eq.${taskId}` 
+        }, 
+        () => {
+          console.log('Work update changed, refreshing data...');
+          fetchWorkUpdates();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [taskId]);
+
   const fetchWorkUpdates = async () => {
     try {
       setLoading(true);
+      setFetchError(null);
+      
+      console.log(`Fetching work updates for task ${taskId}...`);
       // First, get all work updates for this task
       const { data: updates, error: updatesError } = await supabase
         .from("work_updates")
@@ -75,7 +104,19 @@ const WorkUpdatesDrawer = ({
         .eq("task_id", taskId)
         .order("submitted_at", { ascending: false });
 
-      if (updatesError) throw updatesError;
+      if (updatesError) {
+        console.error("Error fetching work updates:", updatesError);
+        setFetchError("Failed to load updates. Please try again.");
+        throw updatesError;
+      }
+      
+      if (!updates || updates.length === 0) {
+        console.log("No updates found for this task");
+        setWorkUpdates([]);
+        return;
+      }
+      
+      console.log(`Found ${updates.length} work updates`);
       
       // For each update, get the operator name from the profiles table
       const updatesWithOperatorNames = await Promise.all(
@@ -105,7 +146,8 @@ const WorkUpdatesDrawer = ({
       
       setWorkUpdates(updatesWithOperatorNames);
     } catch (error) {
-      console.error("Error fetching work updates:", error);
+      console.error("Error in fetchWorkUpdates:", error);
+      setFetchError("Could not load work updates. Please try again.");
       toast({
         title: "Failed to load updates",
         description: "Could not load work updates. Please try again.",
@@ -121,12 +163,21 @@ const WorkUpdatesDrawer = ({
   };
 
   const handleUpdateStatus = async (updateId: string, newStatus: 'approved' | 'rejected') => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to perform this action.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       setSubmitting(true);
       
-      const { error } = await supabase
+      console.log(`Updating work update ${updateId} to status ${newStatus}...`);
+      
+      const { data, error } = await supabase
         .from("work_updates")
         .update({
           status: newStatus,
@@ -134,17 +185,28 @@ const WorkUpdatesDrawer = ({
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString()
         })
-        .eq("id", updateId);
+        .eq("id", updateId)
+        .select();
         
-      if (error) throw error;
+      if (error) {
+        console.error("Error updating work status:", error);
+        throw error;
+      }
+      
+      console.log("Update successful:", data);
       
       toast({
         title: newStatus === 'approved' ? "Update Approved" : "Update Rejected",
         description: "The work update status has been changed successfully.",
       });
       
-      // Refresh the work updates
-      fetchWorkUpdates();
+      // Update local state to avoid refetching
+      setWorkUpdates(prev => prev.map(update => 
+        update.id === updateId 
+          ? { ...update, status: newStatus, supervisor_feedback: feedback || null }
+          : update
+      ));
+      
       setFeedback("");
       setSelectedUpdate(null);
     } catch (error) {
@@ -164,6 +226,10 @@ const WorkUpdatesDrawer = ({
     return data.publicUrl;
   };
 
+  const handleRetry = () => {
+    fetchWorkUpdates();
+  };
+
   return (
     <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DrawerContent className="max-h-[90vh]">
@@ -175,6 +241,11 @@ const WorkUpdatesDrawer = ({
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : fetchError ? (
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-4">{fetchError}</p>
+              <Button onClick={handleRetry} variant="outline">Retry</Button>
             </div>
           ) : workUpdates.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -209,6 +280,11 @@ const WorkUpdatesDrawer = ({
                       src={getImageUrl(update.image_url)} 
                       alt="Work progress" 
                       className="w-full h-auto max-h-80 object-contain"
+                      onError={(e) => {
+                        console.error("Image failed to load:", update.image_url);
+                        (e.target as HTMLImageElement).src = "/placeholder.svg";
+                        (e.target as HTMLImageElement).alt = "Image unavailable";
+                      }}
                     />
                   </div>
                   

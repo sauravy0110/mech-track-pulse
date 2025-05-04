@@ -34,6 +34,7 @@ const WorkUpdateModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageCapture, setImageCapture] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -47,6 +48,7 @@ const WorkUpdateModal = ({
       setImageCapture(null);
       setPreviewUrl(null);
       setComment("");
+      setCameraError(null);
     }
     
     return () => {
@@ -56,6 +58,7 @@ const WorkUpdateModal = ({
 
   const startCamera = async () => {
     try {
+      setCameraError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: "environment" }
       });
@@ -67,6 +70,7 @@ const WorkUpdateModal = ({
       }
     } catch (err) {
       console.error("Error accessing camera:", err);
+      setCameraError("Unable to access camera. Please check permissions.");
       toast({
         title: "Camera Error",
         description: "Unable to access your camera. Please check permissions.",
@@ -113,6 +117,12 @@ const WorkUpdateModal = ({
             setImageCapture(blob);
             setPreviewUrl(URL.createObjectURL(blob));
             stopCamera();
+          } else {
+            toast({
+              title: "Image Capture Failed",
+              description: "Failed to capture image. Please try again.",
+              variant: "destructive",
+            });
           }
         }, "image/jpeg", 0.9);
       }
@@ -123,7 +133,9 @@ const WorkUpdateModal = ({
     if (!imageCapture || !user) {
       toast({
         title: "Missing Information",
-        description: "Please capture an image before submitting.",
+        description: !imageCapture 
+          ? "Please capture an image before submitting." 
+          : "You must be logged in to submit updates.",
         variant: "destructive",
       });
       return;
@@ -137,16 +149,22 @@ const WorkUpdateModal = ({
         type: "image/jpeg" 
       });
       
+      console.log("Uploading image to storage...");
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("work_updates")
         .upload(`${user.id}/${taskId}/${file.name}`, file);
       
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
       
       const imageUrl = `${uploadData.path}`;
+      console.log("Image uploaded successfully:", imageUrl);
       
       // 2. Create work update record
-      const { error: insertError } = await supabase
+      console.log("Creating work update record...");
+      const { data: insertData, error: insertError } = await supabase
         .from("work_updates")
         .insert({
           task_id: taskId,
@@ -155,9 +173,15 @@ const WorkUpdateModal = ({
           comment: comment.trim() || null,
           submitted_at: new Date().toISOString(),
           status: "pending"
-        });
+        })
+        .select();
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        throw insertError;
+      }
+      
+      console.log("Work update submitted successfully:", insertData);
       
       toast({
         title: "Update Submitted",
@@ -178,6 +202,9 @@ const WorkUpdateModal = ({
   };
 
   const retakePhoto = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setImageCapture(null);
     setPreviewUrl(null);
     startCamera();
@@ -198,17 +225,24 @@ const WorkUpdateModal = ({
             {!previewUrl ? (
               <>
                 <div className="relative w-full h-64 bg-gray-100 border border-gray-300 rounded-md overflow-hidden">
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
+                  {cameraError ? (
+                    <div className="h-full flex items-center justify-center p-4 text-center text-muted-foreground">
+                      {cameraError}
+                    </div>
+                  ) : (
+                    <video 
+                      ref={videoRef} 
+                      autoPlay 
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                   <canvas ref={canvasRef} className="hidden" />
                 </div>
                 <Button 
                   onClick={captureImage} 
                   className="flex items-center"
+                  disabled={!!cameraError}
                 >
                   <Camera className="mr-2 h-4 w-4" />
                   Capture Photo
