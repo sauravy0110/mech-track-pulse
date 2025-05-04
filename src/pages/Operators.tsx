@@ -23,7 +23,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Tabs,
@@ -41,6 +40,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import OperatorDetailsForm from "@/components/operators/OperatorDetailsForm";
 import SupervisorManagement from "@/components/supervisors/SupervisorManagement";
+import { useNavigate } from "react-router-dom";
 
 // Define operator type
 interface Operator {
@@ -64,17 +64,20 @@ interface Operator {
 }
 
 const Operators = () => {
-  const { isRole } = useAuth();
+  const { user, isRole } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
   const [isAddOperatorOpen, setIsAddOperatorOpen] = useState(false);
+  const [isAddSupervisorOpen, setIsAddSupervisorOpen] = useState(false);
   const [isEditOperatorOpen, setIsEditOperatorOpen] = useState(false);
   const { toast } = useToast();
   
   const canAddOperators = isRole(["owner", "supervisor"]);
+  const canAddSupervisors = isRole(["owner"]);
   const isOwner = isRole(["owner"]);
 
   useEffect(() => {
@@ -137,9 +140,14 @@ const Operators = () => {
       .toUpperCase();
   };
 
-  const handleCallOperator = (phone: string | null) => {
+  const handleCallOperator = (phone: string | null, name: string) => {
     if (phone) {
+      // Create actual telephone link
       window.location.href = `tel:${phone}`;
+      toast({
+        title: "Calling operator",
+        description: `Initiating call to ${name} at ${phone}`,
+      });
     } else {
       toast({
         title: "No Phone Number",
@@ -151,7 +159,11 @@ const Operators = () => {
 
   const handleMessageOperator = (operatorId: string, name: string) => {
     // Navigate to the chat page with the operator's ID
-    window.location.href = `/chat?userId=${operatorId}&name=${encodeURIComponent(name)}`;
+    navigate(`/chat?userId=${operatorId}&name=${encodeURIComponent(name)}`);
+    toast({
+      title: "Opening chat",
+      description: `Opening chat with ${name}`,
+    });
   };
 
   const handleAddOperatorSuccess = () => {
@@ -160,6 +172,14 @@ const Operators = () => {
     toast({
       title: "Success",
       description: "New operator has been added",
+    });
+  };
+
+  const handleAddSupervisorSuccess = () => {
+    setIsAddSupervisorOpen(false);
+    toast({
+      title: "Success",
+      description: "New supervisor has been added",
     });
   };
 
@@ -217,7 +237,15 @@ const Operators = () => {
             />
           </TabsContent>
           <TabsContent value="supervisors">
-            <SupervisorManagement />
+            <div className="mb-4">
+              {canAddSupervisors && (
+                <Button className="mb-6" onClick={() => setIsAddSupervisorOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Supervisor
+                </Button>
+              )}
+              <SupervisorManagement />
+            </div>
           </TabsContent>
         </Tabs>
       )}
@@ -251,6 +279,22 @@ const Operators = () => {
             </DialogDescription>
           </DialogHeader>
           <OperatorDetailsForm onSuccess={handleAddOperatorSuccess} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Supervisor Dialog */}
+      <Dialog open={isAddSupervisorOpen} onOpenChange={setIsAddSupervisorOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Supervisor</DialogTitle>
+            <DialogDescription>
+              Enter the supervisor's details below. All fields marked with * are required.
+            </DialogDescription>
+          </DialogHeader>
+          <OperatorDetailsForm 
+            onSuccess={handleAddSupervisorSuccess} 
+            roleType="supervisor" 
+          />
         </DialogContent>
       </Dialog>
 
@@ -300,7 +344,7 @@ const OperatorsPanel = ({
   loading: boolean;
   formatTime: (date: Date | null) => string;
   getInitials: (name: string) => string;
-  handleCallOperator: (phone: string | null) => void;
+  handleCallOperator: (phone: string | null, name: string) => void;
   handleMessageOperator: (operatorId: string, name: string) => void;
   setSelectedOperator: (id: string | null) => void;
   setIsEditOperatorOpen: (isOpen: boolean) => void;
@@ -460,7 +504,7 @@ const OperatorsPanel = ({
                             <Button 
                               variant="outline" 
                               size="icon"
-                              onClick={() => handleCallOperator(operator.phone)}
+                              onClick={() => handleCallOperator(operator.phone, operator.name)}
                             >
                               <Phone className="h-4 w-4" />
                             </Button>

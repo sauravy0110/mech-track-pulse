@@ -183,8 +183,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Check if this email exists and if it has the correct role
-      // In a real application, this should be validated server-side
+      // First, check if this email exists in the profiles table with the correct role
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, id')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (profileError) {
+        console.error("Error checking profile:", profileError);
+      } else if (profileData && profileData.role !== role) {
+        // Role mismatch
+        toast({
+          title: "Access denied",
+          description: `This email is registered as a ${profileData.role}, not as a ${role}.`,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        throw new Error(`This email is registered as a ${profileData.role}, not as a ${role}.`);
+      }
+      
+      // Attempt to sign in
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -192,20 +211,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (error) throw error;
       
-      // Check if the user role is correct
-      // In a real application, the role would be stored in the database
-      const userRole = data.user?.user_metadata?.role || '';
-      
-      if (userRole && userRole !== role) {
-        // Role mismatch, sign out and notify
-        await supabase.auth.signOut();
+      // Check if email is confirmed
+      if (!data.user?.email_confirmed_at) {
+        // Email not confirmed
         toast({
-          title: "Access denied",
-          description: `This email is registered as a ${userRole}, not as a ${role}.`,
+          title: "Email not verified",
+          description: "Please verify your email before logging in. Check your inbox for a verification link.",
           variant: "destructive",
         });
-        setIsLoading(false);
-        return;
+        
+        // Sign out since email is not confirmed
+        await supabase.auth.signOut();
+        throw new Error("Email not verified. Please check your inbox for a verification link.");
       }
       
       // Success is handled by onAuthStateChange listener
@@ -232,25 +249,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Check for existing account with this email
-      const { data: existingUsers, error: searchError } = await supabase.auth
-        .signInWithPassword({
-          email,
-          password: "dummy-check-password",
-        });
+      // Check if there's already an account with this email and role
+      const { data: existingProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('email', email)
+        .maybeSingle();
         
-      if (!searchError) {
-        // Email already exists
+      if (profileError) {
+        console.error("Error checking existing profile:", profileError);
+      } else if (existingProfile) {
+        // Profile exists with this email
+        const message = existingProfile.role === role
+          ? "There is already an account with this email address."
+          : `This email is already registered as a ${existingProfile.role}.`;
+        
         toast({
           title: "Email already in use",
-          description: "There is already an account with this email address.",
+          description: message,
           variant: "destructive",
         });
-        setIsLoading(false);
-        return;
+        throw new Error(message);
       }
 
-      // Create new account
+      // Create new account with email confirmation required
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -259,22 +281,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             name,
             role,
           },
+          emailRedirectTo: window.location.origin,
         },
       });
       
       if (error) throw error;
       
-      // Success is handled by onAuthStateChange listener and DB trigger
-      toast({
-        title: "Registration successful",
-        description: `Welcome, ${name}!`,
-      });
+      // Check if the user is created but needs email confirmation
+      if (data?.user && !data.user.email_confirmed_at) {
+        toast({
+          title: "Registration successful",
+          description: "Please check your email to verify your account before logging in.",
+        });
+      } else {
+        toast({
+          title: "Registration successful",
+          description: `Welcome, ${name}!`,
+        });
+      }
       
       return;
     } catch (error: any) {
       console.error("Registration failed", error);
       
-      // Detect if the error is because email is already in use
       if (error.message.includes("already registered")) {
         toast({
           title: "Email already in use",
@@ -315,16 +344,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         variant: "destructive",
       });
     }
-  };
-  
-  const isRole = (role: UserRole | UserRole[]): boolean => {
-    if (!user) return false;
-    
-    if (Array.isArray(role)) {
-      return role.includes(user.role);
-    }
-    
-    return user.role === role;
   };
 
   return (

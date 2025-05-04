@@ -19,6 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { generatePassword } from "@/utils/password";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 // Define an extended profile type with all the fields we need
 interface ExtendedProfile {
@@ -40,8 +43,8 @@ interface ExtendedProfile {
   updated_at: string;
 }
 
-// Define schema for operator details
-const operatorSchema = z.object({
+// Define schema for staff details
+const staffSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Must be a valid email"),
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
@@ -55,22 +58,29 @@ const operatorSchema = z.object({
   status: z.enum(["online", "offline", "away"]).default("offline"),
 });
 
-type OperatorFormValues = z.infer<typeof operatorSchema>;
+type StaffFormValues = z.infer<typeof staffSchema>;
 
 interface OperatorDetailsFormProps {
   operatorId?: string;
   onSuccess?: () => void;
   isEdit?: boolean;
+  roleType?: "operator" | "supervisor";
 }
 
-const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: OperatorDetailsFormProps) => {
+const OperatorDetailsForm = ({ 
+  operatorId, 
+  onSuccess, 
+  isEdit = false, 
+  roleType = "operator" 
+}: OperatorDetailsFormProps) => {
   const [loading, setLoading] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const { toast } = useToast();
   
-  const form = useForm<OperatorFormValues>({
-    resolver: zodResolver(operatorSchema),
+  const form = useForm<StaffFormValues>({
+    resolver: zodResolver(staffSchema),
     defaultValues: {
       name: "",
       email: "",
@@ -87,13 +97,41 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
   });
 
   useEffect(() => {
-    // If editing existing operator, fetch their details
+    // If editing existing staff, fetch their details
     if (isEdit && operatorId) {
-      fetchOperatorDetails(operatorId);
+      fetchStaffDetails(operatorId);
     }
   }, [operatorId, isEdit]);
 
-  const fetchOperatorDetails = async (id: string) => {
+  const checkEmailAvailability = async (email: string) => {
+    try {
+      setEmailError(null);
+      
+      // Check if this email already exists in the profiles table
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (data) {
+        // Email exists, check if it's the same role type
+        if (data.role !== roleType) {
+          setEmailError(`This email is already registered as a ${data.role}`);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error checking email availability:", error);
+      return false;
+    }
+  };
+
+  const fetchStaffDetails = async (id: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -127,10 +165,10 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
         }
       }
     } catch (error) {
-      console.error("Error fetching operator details:", error);
+      console.error("Error fetching staff details:", error);
       toast({
         title: "Error",
-        description: "Failed to load operator details",
+        description: "Failed to load staff details",
         variant: "destructive",
       });
     } finally {
@@ -174,22 +212,32 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
     }
   };
 
-  const onSubmit = async (values: OperatorFormValues) => {
+  const onSubmit = async (values: StaffFormValues) => {
     setLoading(true);
     try {
       let profileImageUrl = null;
 
-      // Create new operator if not editing
+      // First, check email availability
+      if (!isEdit && !(await checkEmailAvailability(values.email))) {
+        setLoading(false);
+        return;
+      }
+
+      // Create new staff if not editing
       if (!isEdit) {
+        // Generate a secure random password
+        const generatedPassword = generatePassword();
+        
         // Creating a new user with authentication
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: values.email,
-          password: "tempPassword123", // This should be randomly generated or requested
+          password: generatedPassword,
           options: {
             data: {
               name: values.name,
-              role: "operator",
+              role: roleType,
             },
+            emailRedirectTo: window.location.origin,
           },
         });
 
@@ -219,13 +267,19 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
               certifications: values.certifications,
               notes: values.notes,
               status: values.status,
+              role: roleType, // Make sure role is correctly set
             })
             .eq("id", userId);
 
           if (updateError) throw updateError;
+          
+          toast({
+            title: "Staff account created",
+            description: `An email has been sent to ${values.email} with verification instructions.`,
+          });
         }
       } else if (operatorId) {
-        // Update existing operator
+        // Update existing staff
         // Upload new profile image if selected
         if (profileImage) {
           profileImageUrl = await uploadProfileImage(operatorId);
@@ -255,21 +309,35 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
 
       toast({
         title: "Success",
-        description: isEdit ? "Operator updated successfully" : "New operator added successfully",
+        description: isEdit 
+          ? `${roleType.charAt(0).toUpperCase() + roleType.slice(1)} updated successfully` 
+          : `New ${roleType} added successfully`,
       });
 
       if (onSuccess) onSuccess();
     } catch (error: any) {
-      console.error("Error saving operator:", error);
+      console.error("Error saving staff:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save operator details",
+        description: error.message || `Failed to save ${roleType} details`,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  // Validate email when it changes
+  useEffect(() => {
+    const email = form.watch("email");
+    if (email && email.includes('@') && !isEdit) {
+      const debounceTimer = setTimeout(() => {
+        checkEmailAvailability(email);
+      }, 500);
+      
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [form.watch("email"), isEdit]);
 
   return (
     <Form {...form}>
@@ -283,7 +351,7 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
                   .split(" ")
                   .map(part => part.charAt(0))
                   .join("")
-                  .toUpperCase() || "OP"}
+                  .toUpperCase() || roleType === "operator" ? "OP" : "SV"}
               </AvatarFallback>
             </Avatar>
             <Button
@@ -305,13 +373,22 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
           />
         </div>
 
+        {!isEdit && (
+          <Alert variant="info">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              A verification email will be sent to the new {roleType} when created
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Full Name</FormLabel>
+                <FormLabel>Full Name*</FormLabel>
                 <FormControl>
                   <Input placeholder="John Doe" {...field} />
                 </FormControl>
@@ -325,10 +402,17 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>Email*</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="john@example.com" {...field} />
+                  <Input 
+                    type="email" 
+                    placeholder="john@example.com" 
+                    {...field} 
+                    readOnly={isEdit}
+                    className={emailError ? "border-red-500" : ""}
+                  />
                 </FormControl>
+                {emailError && <FormMessage>{emailError}</FormMessage>}
                 <FormMessage />
               </FormItem>
             )}
@@ -339,7 +423,7 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone Number</FormLabel>
+                <FormLabel>Phone Number*</FormLabel>
                 <FormControl>
                   <Input placeholder="123-456-7890" {...field} />
                 </FormControl>
@@ -474,8 +558,16 @@ const OperatorDetailsForm = ({ operatorId, onSuccess, isEdit = false }: Operator
           <Button variant="outline" type="button" onClick={() => onSuccess?.()}>
             Cancel
           </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Saving..." : isEdit ? "Update Operator" : "Add Operator"}
+          <Button 
+            type="submit" 
+            disabled={loading || !!emailError}
+          >
+            {loading 
+              ? "Saving..." 
+              : isEdit 
+                ? `Update ${roleType.charAt(0).toUpperCase() + roleType.slice(1)}`
+                : `Add ${roleType.charAt(0).toUpperCase() + roleType.slice(1)}`
+            }
           </Button>
         </div>
       </form>
