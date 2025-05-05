@@ -208,7 +208,7 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
                   onChange={setOtp}
                   render={({ slots }) => (
                     <InputOTPGroup>
-                      {slots.map((slot, index) => (
+                      {slots && slots.map((slot, index) => (
                         <InputOTPSlot key={index} {...slot} index={index} />
                       ))}
                     </InputOTPGroup>
