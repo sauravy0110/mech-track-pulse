@@ -366,29 +366,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error("Email not found");
       }
       
-      // Generate a random 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Store the OTP and email in localStorage for verification
-      const resetData = {
-        email,
-        otp,
-        createdAt: new Date().getTime(),
-        expires: new Date().getTime() + 15 * 60 * 1000, // 15 minutes expiry
-      };
-      
-      localStorage.setItem('mtp-password-reset', JSON.stringify(resetData));
-      
-      // In a real implementation, you would send this OTP via email using a serverless function
-      // For now, we'll just simulate the email being sent
-      
-      // For demo purposes, display the OTP in console and toast
-      console.log(`OTP for ${email}: ${otp}`);
-      
-      toast({
-        title: "Verification code sent",
-        description: `A verification code has been sent to ${email}. For this demo, use code: ${otp}`,
+      // Call our edge function to generate and send OTP
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          action: "send-otp"
+        }
       });
+      
+      if (error) {
+        throw new Error(error.message || "Failed to send verification code");
+      }
+      
+      if (data && data.otp) {
+        // In a real implementation, the OTP would be sent via email and not returned
+        // For demonstration, we show the OTP in the toast
+        console.log(`OTP for ${email}: ${data.otp}`);
+        
+        toast({
+          title: "Verification code sent",
+          description: `A verification code has been sent to ${email}. For this demo, use code: ${data.otp}`,
+        });
+      }
       
       return;
     } catch (error: any) {
@@ -409,56 +408,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Get stored reset data
-      const resetDataStr = localStorage.getItem('mtp-password-reset');
+      // Verify OTP with edge function
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          otp,
+          action: "verify-otp"
+        }
+      });
       
-      if (!resetDataStr) {
+      if (error) {
         toast({
           title: "Verification failed",
-          description: "No password reset was requested. Please try again.",
+          description: error.message || "Could not verify code",
           variant: "destructive",
         });
         return false;
       }
       
-      const resetData = JSON.parse(resetDataStr);
-      
-      // Check if reset data is valid and not expired
-      if (resetData.email !== email) {
-        toast({
-          title: "Verification failed",
-          description: "Email address doesn't match the one used for reset.",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      if (new Date().getTime() > resetData.expires) {
-        toast({
-          title: "Code expired",
-          description: "The verification code has expired. Please request a new one.",
-          variant: "destructive",
-        });
-        localStorage.removeItem('mtp-password-reset');
-        return false;
-      }
-
-      // Verify the OTP
-      if (otp === resetData.otp) {
+      if (data && data.success) {
         toast({
           title: "Code verified",
           description: "You can now set a new password.",
         });
-        
-        // Update reset data to mark as verified
-        resetData.verified = true;
-        localStorage.setItem('mtp-password-reset', JSON.stringify(resetData));
-        
         return true;
       } else {
+        const errorMessage = data?.error || "The verification code is incorrect.";
         toast({
           title: "Invalid code",
-          description: "The verification code is incorrect.",
+          description: errorMessage,
           variant: "destructive",
         });
         return false;
@@ -481,70 +459,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Get stored reset data
-      const resetDataStr = localStorage.getItem('mtp-password-reset');
-      
-      if (!resetDataStr) {
-        toast({
-          title: "Password update failed",
-          description: "No password reset was verified. Please start again.",
-          variant: "destructive",
-        });
-        throw new Error("Password reset data not found");
-      }
-      
-      const resetData = JSON.parse(resetDataStr);
-      
-      // Check if OTP was verified
-      if (!resetData.verified || resetData.email !== email) {
-        toast({
-          title: "Password update failed",
-          description: "Please verify your identity first.",
-          variant: "destructive",
-        });
-        throw new Error("OTP not verified");
-      }
-      
-      // Update the user's password in Supabase
-      // In a real application, we would use an edge function with admin privileges
-      // For this demonstration, we will use the public API with limited capabilities
-      
-      try {
-        // Check if the user exists with the given email
-        const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
-        if (usersError) throw usersError;
-        
-        const targetUser = users.find(u => u.email === email);
-        if (!targetUser) {
-          throw new Error("User not found");
+      // Update password with edge function
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          password,
+          action: "update-password"
         }
-        
-        // Update the user password
-        const { error: updateError } = await supabase.auth.admin.updateUserById(
-          targetUser.id,
-          { password }
-        );
-        
-        if (updateError) throw updateError;
-        
-        toast({
-          title: "Password updated",
-          description: "Your password has been successfully updated. You can now log in with your new password.",
-        });
-        
-        // Clear the stored reset data
-        localStorage.removeItem('mtp-password-reset');
-      } catch (error) {
-        console.error("Error updating password directly:", error);
-        
-        // For demo purposes, still show success message
-        toast({
-          title: "Password updated (demo)",
-          description: "Your password has been updated. In a production environment, this would update the real database.",
-        });
-        
-        localStorage.removeItem('mtp-password-reset');
+      });
+      
+      if (error) {
+        throw new Error(error.message || "Failed to update password");
       }
+      
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Password update failed");
+      }
+      
+      toast({
+        title: "Password updated",
+        description: "Your password has been successfully updated. You can now log in with your new password.",
+      });
     } catch (error: any) {
       console.error("Password update failed", error);
       toast({
