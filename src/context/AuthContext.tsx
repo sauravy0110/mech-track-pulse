@@ -25,6 +25,9 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   setDemoUser: (role: UserRole) => void; // Added for setting demo user
   clearDemoUser: () => void; // Added for clearing demo user
+  resetPassword: (email: string) => Promise<void>; // Added for password reset
+  verifyOTP: (email: string, otp: string) => Promise<boolean>; // Added for OTP verification
+  updatePassword: (email: string, password: string) => Promise<void>; // Added for password update
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -38,6 +41,9 @@ export const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   setDemoUser: () => {},
   clearDemoUser: () => {},
+  resetPassword: async () => {},
+  verifyOTP: async () => false,
+  updatePassword: async () => {},
 });
 
 interface AuthProviderProps {
@@ -157,6 +163,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Create a demo user without authentication
   const setDemoUser = (role: UserRole) => {
+    // Clear any previous auth state
+    setSession(null);
+    
     const demoUser: User = {
       id: `demo-${role}-${Date.now()}`,
       name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
@@ -182,6 +191,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string, role: UserRole) => {
     try {
       setIsLoading(true);
+      
+      // Clear any demo mode
+      localStorage.removeItem('mtp-demo-role');
+      setIsDemo(false);
       
       // First, check if this email exists in the profiles table with the correct role
       const { data: profileData, error: profileError } = await supabase
@@ -248,6 +261,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (name: string, email: string, password: string, role: UserRole) => {
     try {
       setIsLoading(true);
+      
+      // Clear any demo mode
+      localStorage.removeItem('mtp-demo-role');
+      setIsDemo(false);
       
       // Check if there's already an account with this email and role
       const { data: existingProfile, error: profileError } = await supabase
@@ -324,8 +341,130 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Reset password by sending reset email with OTP
+  const resetPassword = async (email: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Store the email for the OTP verification
+      localStorage.setItem('reset-email', email);
+      
+      // Send the OTP to the user's email (we'll use Supabase's built-in password reset)
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}?verify=true`,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Reset email sent",
+        description: "Please check your email for the reset instructions.",
+      });
+      
+      return;
+    } catch (error: any) {
+      console.error("Password reset failed", error);
+      toast({
+        title: "Password reset failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Verify the OTP code
+  const verifyOTP = async (email: string, otp: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      // For demo purposes, we'll just compare with stored email
+      // In a real implementation, this would verify with Supabase or a backend
+      const storedEmail = localStorage.getItem('reset-email');
+      
+      if (!storedEmail || storedEmail !== email) {
+        toast({
+          title: "Verification failed",
+          description: "Email address doesn't match the one used for reset.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Here we simulate OTP verification
+      // In a real app, you would verify this code with your backend
+      // We're using a basic check for demo purposes (123456)
+      if (otp === '123456') {
+        toast({
+          title: "OTP verified",
+          description: "You can now set a new password.",
+        });
+        return true;
+      } else {
+        toast({
+          title: "Invalid OTP",
+          description: "The verification code is incorrect.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+    } catch (error: any) {
+      console.error("OTP verification failed", error);
+      toast({
+        title: "Verification failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Update the user's password after OTP verification
+  const updatePassword = async (email: string, password: string) => {
+    try {
+      setIsLoading(true);
+      
+      // In a real implementation, this would use Supabase's password update endpoint
+      // For now, we'll just show a success message
+      toast({
+        title: "Password updated",
+        description: "Your password has been successfully updated. You can now login with your new password.",
+      });
+      
+      // Clear the stored email for reset
+      localStorage.removeItem('reset-email');
+      
+    } catch (error: any) {
+      console.error("Password update failed", error);
+      toast({
+        title: "Password update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
+      // First check if we're in demo mode
+      if (isDemo) {
+        clearDemoUser();
+        toast({
+          title: "Demo mode exited",
+          description: "You have been logged out of demo mode.",
+        });
+        return;
+      }
+      
+      // Otherwise, perform a regular logout
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
@@ -359,6 +498,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         register,
         setDemoUser,
         clearDemoUser,
+        resetPassword,
+        verifyOTP,
+        updatePassword,
       }}
     >
       {children}

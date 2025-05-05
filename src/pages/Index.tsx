@@ -30,16 +30,28 @@ const Index = () => {
   }, [isAuthenticated, isLoading, navigate, searchParams]);
 
   const handleDemoAccess = (role: UserRole) => {
-    // Set demo user and redirect to dashboard
-    setDemoUser(role);
-    
-    // Display a toast to inform the user
-    toast({
-      title: "Demo Mode Activated",
-      description: `Using the application in ${role} demo mode.`,
-    });
-    
-    navigate("/dashboard");
+    try {
+      // Clear any existing demo user data first
+      localStorage.removeItem('mtp-demo-role');
+      
+      // Set demo user and redirect to dashboard
+      setDemoUser(role);
+      
+      // Display a toast to inform the user
+      toast({
+        title: "Demo Mode Activated",
+        description: `Using the application in ${role} demo mode.`,
+      });
+      
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error activating demo mode:", error);
+      toast({
+        title: "Demo Access Failed",
+        description: "Could not activate demo mode. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

@@ -8,13 +8,16 @@ interface UseAuthReturn {
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isDemo: boolean; // Added for demo mode
+  isDemo: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   isRole: (role: UserRole | UserRole[]) => boolean;
-  setDemoUser: (role: UserRole) => void; // Added for demo mode
-  clearDemoUser: () => void; // Added for demo mode
+  setDemoUser: (role: UserRole) => void;
+  clearDemoUser: () => void;
+  resetPassword: (email: string) => Promise<void>;
+  verifyOTP: (email: string, otp: string) => Promise<boolean>;
+  updatePassword: (email: string, password: string) => Promise<void>;
 }
 
 export const useAuth = (): UseAuthReturn => {
