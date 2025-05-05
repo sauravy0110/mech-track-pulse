@@ -81,11 +81,10 @@ const TaskUpdateButton = ({ taskId, taskTitle }: TaskUpdateButtonProps) => {
       </Button>
       
       <TaskUpdateModal
-        taskId={taskId}
-        taskTitle={taskTitle}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSubmit={handleSubmitUpdate}
+        onSuccess={() => {}}
+        taskId={taskId}
       />
     </>
   );

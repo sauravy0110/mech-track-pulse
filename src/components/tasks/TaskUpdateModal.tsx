@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   Dialog,
@@ -74,7 +73,7 @@ const TaskUpdateModal = ({
           task_id: taskId,
           operator_id: user.id,
           comment: comment || transcribedText || "Work update submitted",
-          image_url: imageUrl,
+          image_url: imageUrl || "",
           status: emergencyMode ? "emergency" : "pending",
         });
 

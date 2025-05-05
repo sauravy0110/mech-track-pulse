@@ -92,7 +92,7 @@ const CreateTaskModal = ({ isOpen, onClose, onCreateTask }: CreateTaskModalProps
         description,
         client_id: clientId,
         priority,
-        due_date: dueDate,
+        due_date: dueDate ? dueDate.toISOString() : null, // Convert Date to ISO string format
         status: "open",
         estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
         required_skills: requiredSkills,

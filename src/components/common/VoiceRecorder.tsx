@@ -7,11 +7,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
+  onCancel?: () => void; // Make this prop optional
   disabled?: boolean;
 }
 
 export const VoiceRecorder = ({
   onTranscriptionComplete,
+  onCancel,
   disabled = false,
 }: VoiceRecorderProps) => {
   const { toast } = useToast();
@@ -89,6 +91,15 @@ export const VoiceRecorder = ({
     }
   };
 
+  const handleCancel = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      setIsRecording(false);
+    }
+    if (onCancel) onCancel();
+  };
+
   const processAudio = async (audioBlob: Blob) => {
     try {
       // Convert blob to base64
@@ -131,7 +142,7 @@ export const VoiceRecorder = ({
   };
 
   return (
-    <div>
+    <div className="flex gap-2">
       <Button
         type="button"
         variant={isRecording ? "destructive" : "outline"}
@@ -148,6 +159,18 @@ export const VoiceRecorder = ({
           <Mic className="h-4 w-4" />
         )}
       </Button>
+      
+      {onCancel && (
+        <Button 
+          type="button" 
+          variant="outline" 
+          size="sm" 
+          onClick={handleCancel}
+          disabled={disabled || isProcessing}
+        >
+          Cancel
+        </Button>
+      )}
     </div>
   );
 };

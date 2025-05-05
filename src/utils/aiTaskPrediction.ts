@@ -29,8 +29,9 @@ export const recommendOperatorForTask = async (task: Task) => {
     
     const scores: {operatorId: string, name: string, score: number}[] = [];
     
-    const requiredSkills = task.required_skills ? 
-      task.required_skills.toLowerCase().split(",").map(s => s.trim()) : 
+    // Use task.required_skills if it exists (as any because the Task interface might not have it yet)
+    const requiredSkills = (task as any).required_skills ? 
+      (task as any).required_skills.toLowerCase().split(",").map((s: string) => s.trim()) : 
       [];
       
     operators.forEach((operator: Operator) => {
