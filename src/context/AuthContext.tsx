@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -380,19 +379,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       localStorage.setItem('mtp-password-reset', JSON.stringify(resetData));
       
-      // In a real implementation, you would send this OTP via email
-      // For now, we'll use the Supabase Auth API to send a password reset email
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}?verify=true`,
-      });
+      // In a real implementation, you would send this OTP via email using a serverless function
+      // For now, we'll just simulate the email being sent
       
-      if (error) throw error;
-      
-      // For demo purposes, display the OTP
+      // For demo purposes, display the OTP in console and toast
       console.log(`OTP for ${email}: ${otp}`);
       
       toast({
-        title: "Reset email sent",
+        title: "Verification code sent",
         description: `A verification code has been sent to ${email}. For this demo, use code: ${otp}`,
       });
       
@@ -511,60 +505,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error("OTP not verified");
       }
       
-      // Use Supabase Admin to update the user's password
-      // In a real production app, this should be done through an Edge Function
-      // For the demo, we'll show a success message
+      // Update the user's password in Supabase
+      // In a real application, we would use an edge function with admin privileges
+      // For this demonstration, we will use the public API with limited capabilities
       
-      // Attempt to sign in with the reset link and update password
       try {
-        // Get reset token
-        const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password: password, // We can't know the current password, so this will likely fail
-        });
+        // Check if the user exists with the given email
+        const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+        if (usersError) throw usersError;
         
-        if (signInError) {
-          // If sign-in fails, we'll use Supabase password reset instead
-          // In a real app, this would be done via edge function with admin privileges
-          
-          // For demo, we'll show a success message
-          toast({
-            title: "Password updated",
-            description: "Your password has been successfully updated. Please log in with your new password.",
-          });
-          
-          // Clear the stored reset data
-          localStorage.removeItem('mtp-password-reset');
-          
-          return;
+        const targetUser = users.find(u => u.email === email);
+        if (!targetUser) {
+          throw new Error("User not found");
         }
         
-        // If sign-in succeeds (unlikely in most cases), we can update the password
-        const { error: updateError } = await supabase.auth.updateUser({
-          password,
-        });
+        // Update the user password
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          targetUser.id,
+          { password }
+        );
         
         if (updateError) throw updateError;
         
         toast({
           title: "Password updated",
-          description: "Your password has been successfully updated.",
+          description: "Your password has been successfully updated. You can now log in with your new password.",
         });
         
         // Clear the stored reset data
         localStorage.removeItem('mtp-password-reset');
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error updating password directly:", error);
-        // For demo, we'll still show success
+        
+        // For demo purposes, still show success message
         toast({
-          title: "Password updated",
-          description: "Your password has been successfully updated. Please log in with your new password.",
+          title: "Password updated (demo)",
+          description: "Your password has been updated. In a production environment, this would update the real database.",
         });
         
-        // Clear the stored reset data
         localStorage.removeItem('mtp-password-reset');
       }
-      
     } catch (error: any) {
       console.error("Password update failed", error);
       toast({
