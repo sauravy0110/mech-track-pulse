@@ -5,7 +5,6 @@ import AuthForm from "@/components/auth/AuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/context/AuthContext";
 
 const Index = () => {

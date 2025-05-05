@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
   
   const form = useForm<z.infer<typeof passwordSchema>>({
     resolver: zodResolver(passwordSchema),
@@ -46,6 +47,16 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
       confirmPassword: "",
     },
   });
+
+  // Handle countdown timer for OTP resend
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const handleSubmitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,12 +69,24 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
     
     try {
       await resetPassword(email);
-      // For demo purposes, we'll show a message about using OTP 123456
-      toast({
-        title: "Demo Mode",
-        description: "For this demo, use code 123456 as your OTP",
-      });
+      setCountdown(60); // Set 60 seconds countdown for resend
       setStep("otp");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+  
+  const handleResendOTP = async () => {
+    if (countdown > 0) return;
+    
+    try {
+      setError(null);
+      await resetPassword(email);
+      setCountdown(60); // Reset countdown
+      toast({
+        title: "Code resent",
+        description: "A new verification code has been sent to your email.",
+      });
     } catch (err: any) {
       setError(err.message);
     }
@@ -110,6 +133,7 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
     setOtp("");
     setError(null);
     form.reset();
+    setCountdown(0);
   };
   
   const handleClose = () => {
@@ -194,6 +218,18 @@ const ForgotPasswordDialog = ({ open, onClose }: ForgotPasswordDialogProps) => {
               <p className="text-xs text-muted-foreground text-center">
                 Enter the 6-digit code we sent to {email}
               </p>
+              
+              <div className="flex justify-center mt-4">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleResendOTP}
+                  disabled={countdown > 0 || isLoading}
+                  className="text-xs"
+                >
+                  {countdown > 0 ? `Resend in ${countdown}s` : "Resend code"}
+                </Button>
+              </div>
             </div>
             <DialogFooter className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => setStep("email")} variant="outline" type="button" className="w-full sm:w-auto">
