@@ -57,23 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Use our extracted hooks
-  const { isDemo, setDemoUser, clearDemoUser } = useDemoUser(setUser, setSession, initializeAuth);
-  const { resetPassword, verifyOTP, updatePassword } = usePasswordReset(setIsLoading);
-
-  // Check for demo mode on component mount
-  useEffect(() => {
-    const demoRole = localStorage.getItem('mtp-demo-role');
-    if (demoRole) {
-      // If we have a demo role stored, set up a demo user
-      setDemoUser(demoRole as UserRole);
-    } else {
-      // Otherwise, initialize regular auth
-      initializeAuth();
-    }
-  }, []);
-
-  // Set up auth state listener and check for existing session
+  // Define initializeAuth function first, before it's used in useDemoUser hook
   const initializeAuth = async () => {
     try {
       // Set up auth state listener first
@@ -128,16 +112,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       setIsLoading(false);
-      
-      return () => {
-        subscription.unsubscribe();
-      };
     } catch (error) {
       console.error("Error initializing auth:", error);
       setIsLoading(false);
     }
   };
   
+  // Now use the hooks after initializeAuth is defined
+  const { isDemo, setDemoUser, clearDemoUser } = useDemoUser(setUser, setSession, initializeAuth);
+  const { resetPassword, verifyOTP, updatePassword } = usePasswordReset(setIsLoading);
+
+  // Check for demo mode on component mount
+  useEffect(() => {
+    const demoRole = localStorage.getItem('mtp-demo-role');
+    if (demoRole) {
+      // If we have a demo role stored, set up a demo user
+      setDemoUser(demoRole as UserRole);
+    } else {
+      // Otherwise, initialize regular auth
+      initializeAuth();
+    }
+  }, []);
+
   // Separate function to fetch user profile data
   const fetchUserProfile = async (supaUser: SupabaseUser) => {
     try {
