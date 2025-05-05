@@ -2,24 +2,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserRole } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
-
-const DEMO_STORAGE_KEY = 'mtp-demo-role';
 
 export const useDemoAccess = () => {
   const [demoRole, setDemoRole] = useState<UserRole | null>(null);
   const navigate = useNavigate();
+  const { setDemoUser, clearDemoUser } = useAuth();
   
   useEffect(() => {
     // Check if there's a stored demo role on component mount
-    const storedRole = localStorage.getItem(DEMO_STORAGE_KEY);
+    const storedRole = localStorage.getItem('mtp-demo-role');
     if (storedRole) {
       setDemoRole(storedRole as UserRole);
     }
   }, []);
   
   const enterDemoMode = (role: UserRole) => {
-    localStorage.setItem(DEMO_STORAGE_KEY, role);
+    setDemoUser(role);
     setDemoRole(role);
     
     // Display a toast to inform the user
@@ -33,7 +33,7 @@ export const useDemoAccess = () => {
   };
   
   const exitDemoMode = () => {
-    localStorage.removeItem(DEMO_STORAGE_KEY);
+    clearDemoUser();
     setDemoRole(null);
     navigate('/');
   };

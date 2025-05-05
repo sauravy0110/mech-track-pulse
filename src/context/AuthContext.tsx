@@ -2,6 +2,8 @@ import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User as SupabaseUser } from "@supabase/supabase-js";
+import { usePasswordReset } from "@/hooks/usePasswordReset";
+import { useDemoUser } from "@/hooks/useDemoUser";
 
 export type UserRole = "operator" | "supervisor" | "client" | "owner";
 
@@ -11,7 +13,7 @@ export interface User {
   email: string;
   role: UserRole;
   profileImage?: string;
-  isDemo?: boolean; // Added for demo user support
+  isDemo?: boolean;
 }
 
 interface AuthContextType {
@@ -19,15 +21,15 @@ interface AuthContextType {
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isDemo: boolean; // Added for demo mode
+  isDemo: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
-  setDemoUser: (role: UserRole) => void; // Added for setting demo user
-  clearDemoUser: () => void; // Added for clearing demo user
-  resetPassword: (email: string) => Promise<void>; // Added for password reset
-  verifyOTP: (email: string, otp: string) => Promise<boolean>; // Added for OTP verification
-  updatePassword: (email: string, password: string) => Promise<void>; // Added for password update
+  setDemoUser: (role: UserRole) => void;
+  clearDemoUser: () => void;
+  resetPassword: (email: string) => Promise<void>;
+  verifyOTP: (email: string, otp: string) => Promise<boolean>;
+  updatePassword: (email: string, password: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -54,7 +56,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(false);
+  
+  // Use our extracted hooks
+  const { isDemo, setDemoUser, clearDemoUser } = useDemoUser(setUser, setSession, initializeAuth);
+  const { resetPassword, verifyOTP, updatePassword } = usePasswordReset(setIsLoading);
 
   // Check for demo mode on component mount
   useEffect(() => {
@@ -161,40 +166,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Create a demo user without authentication
-  const setDemoUser = (role: UserRole) => {
-    // Clear any previous auth state
-    setSession(null);
-    
-    const demoUser: User = {
-      id: `demo-${role}-${Date.now()}`,
-      name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
-      email: `demo-${role}@mechtrackpulse.com`,
-      role: role,
-      isDemo: true
-    };
-    
-    setUser(demoUser);
-    setIsDemo(true);
-    setIsLoading(false);
-    localStorage.setItem('mtp-demo-role', role);
-  };
-  
-  // Clear the demo user
-  const clearDemoUser = () => {
-    setUser(null);
-    setIsDemo(false);
-    localStorage.removeItem('mtp-demo-role');
-    initializeAuth();
-  };
-
   const login = async (email: string, password: string, role: UserRole) => {
     try {
       setIsLoading(true);
       
       // Clear any demo mode
       localStorage.removeItem('mtp-demo-role');
-      setIsDemo(false);
       
       // First, check if this email exists in the profiles table with the correct role
       const { data: profileData, error: profileError } = await supabase
@@ -264,7 +241,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Clear any demo mode
       localStorage.removeItem('mtp-demo-role');
-      setIsDemo(false);
       
       // Check if there's already an account with this email and role
       const { data: existingProfile, error: profileError } = await supabase
@@ -335,158 +311,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
       }
       
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Reset password by sending reset email with OTP
-  const resetPassword = async (email: string) => {
-    try {
-      setIsLoading(true);
-      
-      // Check if the email exists
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-      
-      if (profileError) {
-        console.error("Error checking email:", profileError);
-      }
-      
-      if (!profile) {
-        toast({
-          title: "Email not found",
-          description: "There is no account registered with this email address.",
-          variant: "destructive",
-        });
-        throw new Error("Email not found");
-      }
-      
-      // Call our edge function to generate and send OTP
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          action: "send-otp"
-        }
-      });
-      
-      if (error) {
-        throw new Error(error.message || "Failed to send verification code");
-      }
-      
-      if (data && data.otp) {
-        // In a real implementation, the OTP would be sent via email and not returned
-        // For demonstration, we show the OTP in the toast
-        console.log(`OTP for ${email}: ${data.otp}`);
-        
-        toast({
-          title: "Verification code sent",
-          description: `A verification code has been sent to ${email}. For this demo, use code: ${data.otp}`,
-        });
-      }
-      
-      return;
-    } catch (error: any) {
-      console.error("Password reset failed", error);
-      toast({
-        title: "Password reset failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Verify the OTP code
-  const verifyOTP = async (email: string, otp: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      
-      // Verify OTP with edge function
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          otp,
-          action: "verify-otp"
-        }
-      });
-      
-      if (error) {
-        toast({
-          title: "Verification failed",
-          description: error.message || "Could not verify code",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      if (data && data.success) {
-        toast({
-          title: "Code verified",
-          description: "You can now set a new password.",
-        });
-        return true;
-      } else {
-        const errorMessage = data?.error || "The verification code is incorrect.";
-        toast({
-          title: "Invalid code",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        return false;
-      }
-    } catch (error: any) {
-      console.error("OTP verification failed", error);
-      toast({
-        title: "Verification failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Update the user's password after OTP verification
-  const updatePassword = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      
-      // Update password with edge function
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          password,
-          action: "update-password"
-        }
-      });
-      
-      if (error) {
-        throw new Error(error.message || "Failed to update password");
-      }
-      
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Password update failed");
-      }
-      
-      toast({
-        title: "Password updated",
-        description: "Your password has been successfully updated. You can now log in with your new password.",
-      });
-    } catch (error: any) {
-      console.error("Password update failed", error);
-      toast({
-        title: "Password update failed",
-        description: error.message,
-        variant: "destructive",
-      });
       throw error;
     } finally {
       setIsLoading(false);
