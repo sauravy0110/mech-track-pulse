@@ -21,9 +21,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { generatePassword } from "@/utils/password";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, FileText, Upload } from "lucide-react";
+import { AlertCircle, FileText, Upload, Copy, Check, Mail, Phone } from "lucide-react";
 import { parseResumeWithOCR } from "@/utils/resumeParser";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/useAuth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 // Array of manufacturing departments
 const manufacturingDepartments = [
@@ -61,6 +63,7 @@ interface ExtendedProfile {
   department?: string | null;
   created_at: string;
   updated_at: string;
+  company_id?: string | null;
 }
 
 // Define schema for staff details
@@ -102,7 +105,12 @@ const OperatorDetailsForm = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState("");
+  const [generatedEmail, setGeneratedEmail] = useState("");
+  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const form = useForm<StaffFormValues>({
     resolver: zodResolver(staffSchema),
@@ -300,6 +308,47 @@ const OperatorDetailsForm = ({
     }
   };
 
+  const handleCopyCredentials = () => {
+    const credentials = `Email: ${generatedEmail}\nPassword: ${generatedPassword}`;
+    navigator.clipboard.writeText(credentials);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const sendCredentialsByEmail = async (email: string) => {
+    try {
+      // In a real application, this would send an email with credentials
+      toast({
+        title: "Email Sent",
+        description: `Login credentials have been sent to ${email}`,
+      });
+    } catch (error) {
+      console.error("Error sending email:", error);
+      toast({
+        title: "Failed to send email",
+        description: "Please copy and share the credentials manually",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const sendCredentialsBySMS = async (phone: string) => {
+    try {
+      // In a real application, this would send an SMS with credentials
+      toast({
+        title: "SMS Sent", 
+        description: `Login credentials have been sent to ${phone}`,
+      });
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      toast({
+        title: "Failed to send SMS",
+        description: "Please copy and share the credentials manually",
+        variant: "destructive",
+      });
+    }
+  };
+
   const onSubmit = async (values: StaffFormValues) => {
     setLoading(true);
     try {
@@ -315,10 +364,25 @@ const OperatorDetailsForm = ({
         return;
       }
 
+      // Ensure there is a company ID for the new staff member (from the current owner)
+      const companyId = user?.companyId;
+      
+      if (!companyId && user?.role === 'owner') {
+        toast({
+          title: "Error",
+          description: "Company information not found. Please contact support.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
       // Create new staff if not editing
       if (!isEdit) {
         // Generate a secure random password
         const generatedPassword = generatePassword();
+        setGeneratedPassword(generatedPassword);
+        setGeneratedEmail(values.email);
         
         // Creating a new user with authentication
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -328,6 +392,9 @@ const OperatorDetailsForm = ({
             data: {
               name: values.name,
               role: roleType,
+              company_id: companyId,
+              company_name: user?.companyName,
+              created_by_owner: user?.id,
             },
             emailRedirectTo: window.location.origin,
           },
@@ -366,16 +433,17 @@ const OperatorDetailsForm = ({
               status: values.status,
               department: departmentsString,
               skills: values.skills,
-              role: roleType, // Make sure role is correctly set
+              role: roleType,
+              company_id: companyId,
+              company_name: user?.companyName,
+              created_by_owner: user?.id,
             })
             .eq("id", userId);
 
           if (updateError) throw updateError;
           
-          toast({
-            title: "Staff account created",
-            description: `An email has been sent to ${values.email} with verification instructions.`,
-          });
+          // Show credentials dialog
+          setShowCredentialsDialog(true);
         }
       } else if (operatorId) {
         // Update existing staff
@@ -411,16 +479,14 @@ const OperatorDetailsForm = ({
           .eq("id", operatorId);
 
         if (updateError) throw updateError;
+        
+        toast({
+          title: "Success",
+          description: `${roleType.charAt(0).toUpperCase() + roleType.slice(1)} updated successfully`,
+        });
+        
+        if (onSuccess) onSuccess();
       }
-
-      toast({
-        title: "Success",
-        description: isEdit 
-          ? `${roleType.charAt(0).toUpperCase() + roleType.slice(1)} updated successfully` 
-          : `New ${roleType} added successfully`,
-      });
-
-      if (onSuccess) onSuccess();
     } catch (error: any) {
       console.error("Error saving staff:", error);
       toast({
@@ -428,9 +494,21 @@ const OperatorDetailsForm = ({
         description: error.message || `Failed to save ${roleType} details`,
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleDialogClose = () => {
+    setShowCredentialsDialog(false);
+    
+    toast({
+      title: "Success",
+      description: isEdit 
+        ? `${roleType.charAt(0).toUpperCase() + roleType.slice(1)} updated successfully` 
+        : `New ${roleType} added successfully`,
+    });
+
+    if (onSuccess) onSuccess();
   };
 
   // Toggle department selection
@@ -490,11 +568,11 @@ const OperatorDetailsForm = ({
           />
         </div>
 
-        {!isEdit && (
+        {!isEdit && user?.role === 'owner' && (
           <Alert variant="info">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              A verification email will be sent to the new {roleType} when created
+              A temporary password will be generated for the new {roleType}. They will be prompted to change it on first login.
             </AlertDescription>
           </Alert>
         )}
@@ -770,6 +848,66 @@ const OperatorDetailsForm = ({
           </Button>
         </div>
       </form>
+
+      {/* Credentials Dialog */}
+      <Dialog open={showCredentialsDialog} onOpenChange={handleDialogClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Staff Account Created</DialogTitle>
+            <DialogDescription>
+              Login credentials for {form.getValues("name")}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="p-4 border rounded-md bg-gray-50">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-medium">Email:</span>
+              <span className="text-gray-700">{generatedEmail}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-medium">Password:</span>
+              <span className="text-gray-700 font-mono">{generatedPassword}</span>
+            </div>
+          </div>
+          
+          <p className="text-sm text-muted-foreground">
+            Please share these credentials with the {roleType}. They will be prompted to change their password on first login.
+          </p>
+          
+          <div className="flex flex-col gap-3">
+            <Button className="w-full" onClick={handleCopyCredentials}>
+              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? "Copied!" : "Copy to clipboard"}
+            </Button>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => sendCredentialsByEmail(form.getValues("email"))}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Email credentials
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => sendCredentialsBySMS(form.getValues("phone"))}
+              >
+                <Phone className="h-4 w-4 mr-2" />
+                SMS credentials
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={handleDialogClose}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   );
 };

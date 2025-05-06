@@ -72,7 +72,7 @@ const Index = () => {
       <main className="flex-1 flex flex-col md:flex-row items-center justify-center p-6">
         <div className="md:w-1/2 mb-12 md:mb-0 md:pr-12">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Real-Time Work Progress Tracking for Mechanical Companies
+            Real-Time Work Progress Tracking System for Manufacturing Companies
           </h2>
           <p className="text-lg md:text-xl text-white/80 mb-8">
             Streamline operations, boost productivity, and enhance client satisfaction with our comprehensive tracking system.

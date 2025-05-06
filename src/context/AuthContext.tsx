@@ -1,9 +1,11 @@
+
 import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { usePasswordReset } from "@/hooks/usePasswordReset";
 import { useDemoUser } from "@/hooks/useDemoUser";
+import { CompanyDetailsFormValues } from "@/components/auth/CompanyDetailsForm";
 
 export type UserRole = "operator" | "supervisor" | "client" | "owner";
 
@@ -14,6 +16,8 @@ export interface User {
   role: UserRole;
   profileImage?: string;
   isDemo?: boolean;
+  companyId?: string;
+  companyName?: string;
 }
 
 interface AuthContextType {
@@ -24,7 +28,7 @@ interface AuthContextType {
   isDemo: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
+  register: (name: string, email: string, password: string, role: UserRole, companyDetails?: CompanyDetailsFormValues) => Promise<void>;
   setDemoUser: (role: UserRole) => void;
   clearDemoUser: () => void;
   resetPassword: (email: string) => Promise<void>;
@@ -78,6 +82,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               email: supaUser.email || '',
               role: (metadata.role as UserRole) || 'operator',
               profileImage: metadata.profile_image,
+              companyId: metadata.company_id,
+              companyName: metadata.company_name,
             });
             
             // Defer additional data fetching
@@ -105,6 +111,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: supaUser.email || '',
           role: (metadata.role as UserRole) || 'operator',
           profileImage: metadata.profile_image,
+          companyId: metadata.company_id,
+          companyName: metadata.company_name,
         });
         
         // Fetch complete user profile
@@ -155,6 +163,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: profile.email,
           role: profile.role as UserRole,
           profileImage: profile.profile_image,
+          companyId: profile.company_id,
+          companyName: profile.company_name,
         });
       }
     } catch (error) {
@@ -172,7 +182,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // First, check if this email exists in the profiles table with the correct role
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('role, id')
+        .select('role, id, company_name, company_id')
         .eq('email', email)
         .maybeSingle();
       
@@ -210,12 +220,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await supabase.auth.signOut();
         throw new Error("Email not verified. Please check your inbox for a verification link.");
       }
-      
-      // Success is handled by onAuthStateChange listener
-      toast({
-        title: "Login successful",
-        description: `Welcome back!`,
-      });
+
+      // If it's an operator or supervisor, show which company they belong to
+      if ((role === "operator" || role === "supervisor") && profileData?.company_name) {
+        toast({
+          title: "Login successful",
+          description: `Welcome back to ${profileData.company_name}!`,
+        });
+      } else {
+        // Success is handled by onAuthStateChange listener
+        toast({
+          title: "Login successful",
+          description: `Welcome back!`,
+        });
+      }
       
       return;
     } catch (error: any) {
@@ -231,7 +249,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (name: string, email: string, password: string, role: UserRole) => {
+  const register = async (
+    name: string, 
+    email: string, 
+    password: string, 
+    role: UserRole,
+    companyDetails?: CompanyDetailsFormValues
+  ) => {
     try {
       setIsLoading(true);
       
@@ -261,20 +285,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(message);
       }
 
+      // Generate a company ID for owner registrations
+      const companyId = role === 'owner' ? crypto.randomUUID() : undefined;
+
+      // Prepare user metadata including company details for owner
+      const metadata: Record<string, any> = {
+        name,
+        role,
+      };
+
+      if (role === 'owner' && companyDetails) {
+        metadata.company_id = companyId;
+        metadata.company_name = companyDetails.companyName;
+      }
+
       // Create new account with email confirmation required
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            name,
-            role,
-          },
+          data: metadata,
           emailRedirectTo: window.location.origin,
         },
       });
       
       if (error) throw error;
+      
+      // For owner registration with company details
+      if (role === 'owner' && companyDetails && data?.user) {
+        // Update the profiles table with company information
+        await supabase.from('profiles').update({
+          company_name: companyDetails.companyName,
+          company_id: companyId,
+          gst_number: companyDetails.gstNumber,
+          registration_number: companyDetails.registrationNumber,
+          company_address: companyDetails.companyAddress
+        }).eq('id', data.user.id);
+      }
       
       // Check if the user is created but needs email confirmation
       if (data?.user && !data.user.email_confirmed_at) {

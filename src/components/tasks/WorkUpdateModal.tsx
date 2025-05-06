@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Loader2, Camera } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -150,16 +150,22 @@ const WorkUpdateModal = ({
       });
       
       console.log("Uploading image to storage...");
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const filePath = `${user.id}/${taskId}/${file.name}`;
+      const { error: uploadError } = await supabase.storage
         .from("work_updates")
-        .upload(`${user.id}/${taskId}/${file.name}`, file);
+        .upload(filePath, file);
       
       if (uploadError) {
         console.error("Upload error:", uploadError);
         throw uploadError;
       }
       
-      const imageUrl = `${uploadData.path}`;
+      // Get the public URL for the uploaded image
+      const { data: publicUrlData } = supabase.storage
+        .from("work_updates")
+        .getPublicUrl(filePath);
+      
+      const imageUrl = publicUrlData.publicUrl;
       console.log("Image uploaded successfully:", imageUrl);
       
       // 2. Create work update record
@@ -189,11 +195,11 @@ const WorkUpdateModal = ({
       });
       
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting work update:", error);
       toast({
         title: "Submission Failed",
-        description: "There was an error submitting your update. Please try again.",
+        description: error.message || "There was an error submitting your update. Please try again.",
         variant: "destructive",
       });
     } finally {

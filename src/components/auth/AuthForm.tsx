@@ -13,6 +13,7 @@ import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ForgotPasswordDialog from "./ForgotPasswordDialog";
+import CompanyDetailsForm, { CompanyDetailsFormValues } from "./CompanyDetailsForm";
 
 const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -25,6 +26,8 @@ const AuthForm = () => {
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [emailAvailable, setEmailAvailable] = useState(true);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [showCompanyDetails, setShowCompanyDetails] = useState(false);
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetailsFormValues | null>(null);
 
   const { login, register } = useAuth();
 
@@ -68,6 +71,43 @@ const AuthForm = () => {
     return () => clearTimeout(debounceTimer);
   }, [email, role, isLogin]);
 
+  const handleCompanyDetailsSubmit = async (values: CompanyDetailsFormValues) => {
+    setCompanyDetails(values);
+    
+    try {
+      if (!name.trim()) {
+        setError("Name is required");
+        return;
+      }
+      
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters");
+        return;
+      }
+      
+      if (!emailAvailable) {
+        setError(`This email is already registered with a different role`);
+        return;
+      }
+      
+      await register(name, email, password, role, values);
+      
+      toast({
+        title: "Registration successful",
+        description: "Please check your email for verification instructions before logging in.",
+      });
+      
+      // Switch to login tab after registration
+      setIsLogin(true);
+      setShowCompanyDetails(false);
+    } catch (error: any) {
+      console.error("Registration error", error);
+      setError(error.message || "Registration failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -77,6 +117,13 @@ const AuthForm = () => {
       if (isLogin) {
         await login(email, password, role);
       } else {
+        if (role === "owner") {
+          // For owner role, first collect company details
+          setShowCompanyDetails(true);
+          setIsSubmitting(false);
+          return;
+        }
+        
         if (!name.trim()) {
           setError("Name is required");
           setIsSubmitting(false);
@@ -119,6 +166,37 @@ const AuthForm = () => {
     }
   };
 
+  // If showing company details form
+  if (!isLogin && showCompanyDetails && role === "owner") {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center">
+            Company Details
+          </CardTitle>
+          <CardDescription className="text-center">
+            Please provide your company information
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CompanyDetailsForm 
+            onSubmit={handleCompanyDetailsSubmit}
+            isSubmitting={isSubmitting}
+          />
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <Button
+            variant="link"
+            onClick={() => setShowCompanyDetails(false)}
+            className="text-sm"
+          >
+            Back to registration
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card className="w-full max-w-md mx-auto">
@@ -137,6 +215,7 @@ const AuthForm = () => {
             <Tabs defaultValue="login" onValueChange={(value) => {
               setIsLogin(value === "login");
               setError(null);
+              setShowCompanyDetails(false);
             }}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
@@ -266,10 +345,12 @@ const AuthForm = () => {
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="operator" id="reg-operator" />
                       <Label htmlFor="reg-operator">Operator</Label>
+                      <span className="text-xs text-muted-foreground ml-2">(Registration by owner only)</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="supervisor" id="reg-supervisor" />
                       <Label htmlFor="reg-supervisor">Supervisor</Label>
+                      <span className="text-xs text-muted-foreground ml-2">(Registration by owner only)</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="client" id="reg-client" />
@@ -278,9 +359,19 @@ const AuthForm = () => {
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="owner" id="reg-owner" />
                       <Label htmlFor="reg-owner">Owner</Label>
+                      <span className="text-xs text-muted-foreground ml-2">(Company registration required)</span>
                     </div>
                   </RadioGroup>
                 </div>
+                
+                {(role === "operator" || role === "supervisor") && (
+                  <Alert variant="warning" className="bg-amber-50">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {role === "operator" ? "Operators" : "Supervisors"} can only be registered by company owners
+                    </AlertDescription>
+                  </Alert>
+                )}
                 
                 <Alert variant="info" className="bg-blue-50">
                   <AlertCircle className="h-4 w-4" />
@@ -301,7 +392,7 @@ const AuthForm = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isSubmitting || (!isLogin && !emailAvailable)}
+              disabled={isSubmitting || (!isLogin && !emailAvailable) || (!isLogin && (role === "operator" || role === "supervisor"))}
             >
               {isSubmitting ? (
                 <>
@@ -322,6 +413,7 @@ const AuthForm = () => {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError(null);
+                setShowCompanyDetails(false);
               }}
               className="text-primary hover:underline"
             >
