@@ -2,6 +2,7 @@
 import { useContext } from "react";
 import { AuthContext, UserRole, User } from "@/context/AuthContext";
 import { Session } from "@supabase/supabase-js";
+import { CompanyDetailsFormValues } from "@/components/auth/CompanyDetailsForm";
 
 interface UseAuthReturn {
   user: User | null;
@@ -11,7 +12,7 @@ interface UseAuthReturn {
   isDemo: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
+  register: (name: string, email: string, password: string, role: UserRole, companyDetails?: CompanyDetailsFormValues) => Promise<void>;
   isRole: (role: UserRole | UserRole[]) => boolean;
   setDemoUser: (role: UserRole) => void;
   clearDemoUser: () => void;
