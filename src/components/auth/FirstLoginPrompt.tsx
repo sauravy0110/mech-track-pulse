@@ -50,11 +50,25 @@ const FirstLoginPrompt = ({ userId, userName, userEmail, onPasswordUpdated }: Fi
         description: "Your password has been updated successfully."
       });
       
-      // Also update a flag in the profile to mark first login complete
-      await supabase
-        .from("profiles")
-        .update({ first_login_completed: true })
-        .eq("id", userId);
+      // First check if first_login_completed column exists
+      const { data: columnsData, error: columnsError } = await supabase
+        .from('information_schema.columns')
+        .select('column_name')
+        .eq('table_name', 'profiles')
+        .eq('table_schema', 'public')
+        .eq('column_name', 'first_login_completed');
+
+      // If column exists, update it
+      if (columnsData && columnsData.length > 0) {
+        await supabase
+          .from("profiles")
+          .update({ first_login_completed: true })
+          .eq("id", userId);
+      } else {
+        console.log("first_login_completed column doesn't exist yet");
+        // The column doesn't exist, but the password was updated
+        // This is fine, we'll just continue
+      }
       
       onPasswordUpdated();
     } catch (error: any) {
