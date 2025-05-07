@@ -64,9 +64,14 @@ export type Database = {
         Row: {
           address: string | null
           certifications: string | null
+          company_address: string | null
+          company_id: string | null
+          company_name: string | null
           created_at: string
           email: string
           emergency_contact: string | null
+          first_login_completed: boolean | null
+          gst_number: string | null
           height: string | null
           id: string
           name: string
@@ -75,6 +80,7 @@ export type Database = {
           phone: string | null
           profile_image: string | null
           qualifications: string | null
+          registration_number: string | null
           role: string
           status: string | null
           updated_at: string
@@ -83,9 +89,14 @@ export type Database = {
         Insert: {
           address?: string | null
           certifications?: string | null
+          company_address?: string | null
+          company_id?: string | null
+          company_name?: string | null
           created_at?: string
           email: string
           emergency_contact?: string | null
+          first_login_completed?: boolean | null
+          gst_number?: string | null
           height?: string | null
           id: string
           name: string
@@ -94,6 +105,7 @@ export type Database = {
           phone?: string | null
           profile_image?: string | null
           qualifications?: string | null
+          registration_number?: string | null
           role: string
           status?: string | null
           updated_at?: string
@@ -102,9 +114,14 @@ export type Database = {
         Update: {
           address?: string | null
           certifications?: string | null
+          company_address?: string | null
+          company_id?: string | null
+          company_name?: string | null
           created_at?: string
           email?: string
           emergency_contact?: string | null
+          first_login_completed?: boolean | null
+          gst_number?: string | null
           height?: string | null
           id?: string
           name?: string
@@ -113,6 +130,7 @@ export type Database = {
           phone?: string | null
           profile_image?: string | null
           qualifications?: string | null
+          registration_number?: string | null
           role?: string
           status?: string | null
           updated_at?: string

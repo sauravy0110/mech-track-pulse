@@ -16,36 +16,20 @@ export const useFirstLogin = (user: User | null) => {
       }
 
       try {
-        // First check if first_login_completed column exists
-        const { data: columnsData, error: columnsError } = await supabase
-          .from('information_schema.columns')
-          .select('column_name')
-          .eq('table_name', 'profiles')
-          .eq('table_schema', 'public')
-          .eq('column_name', 'first_login_completed');
-
-        const columnExists = columnsData && columnsData.length > 0;
-
-        if (columnExists) {
-          // If column exists, check if first login is completed
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("first_login_completed")
-            .eq("id", user.id)
-            .single();
-            
-          if (error) {
-            console.error("Error checking first login status:", error);
-          } else {
-            // If first_login_completed is null or false, show prompt
-            if (data && data.first_login_completed !== true) {
-              setShowFirstLoginPrompt(true);
-            }
-          }
+        // Skip column existence check and directly try to access the profile
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("first_login_completed")
+          .eq("id", user.id)
+          .single();
+          
+        if (error) {
+          console.error("Error checking first login status:", error);
         } else {
-          console.log("first_login_completed column doesn't exist in profiles table yet");
-          // Column doesn't exist, we'll assume no first login required
-          // You might want to run the migration at this point
+          // If first_login_completed is null or false, show prompt
+          if (data && data.first_login_completed !== true) {
+            setShowFirstLoginPrompt(true);
+          }
         }
       } catch (err) {
         console.error("Error in first login check:", err);

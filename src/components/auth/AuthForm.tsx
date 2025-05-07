@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -365,7 +364,7 @@ const AuthForm = () => {
                 </div>
                 
                 {(role === "operator" || role === "supervisor") && (
-                  <Alert variant="warning" className="bg-amber-50">
+                  <Alert variant="default" className="bg-amber-50">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       {role === "operator" ? "Operators" : "Supervisors"} can only be registered by company owners

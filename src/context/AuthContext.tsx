@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +17,8 @@ export interface User {
   isDemo?: boolean;
   companyId?: string;
   companyName?: string;
+  company_id?: string; // Keeping for backward compatibility
+  company_name?: string; // Keeping for backward compatibility
 }
 
 interface AuthContextType {
@@ -84,6 +85,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               profileImage: metadata.profile_image,
               companyId: metadata.company_id,
               companyName: metadata.company_name,
+              company_id: metadata.company_id,
+              company_name: metadata.company_name,
             });
             
             // Defer additional data fetching
@@ -113,6 +116,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           profileImage: metadata.profile_image,
           companyId: metadata.company_id,
           companyName: metadata.company_name,
+          company_id: metadata.company_id,
+          company_name: metadata.company_name,
         });
         
         // Fetch complete user profile
@@ -165,6 +170,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           profileImage: profile.profile_image,
           companyId: profile.company_id,
           companyName: profile.company_name,
+          company_id: profile.company_id,
+          company_name: profile.company_name,
         });
       }
     } catch (error) {

@@ -69,9 +69,9 @@ const Sidebar = () => {
             <div className="ml-3">
               <p className="text-sm font-medium">{user?.name || "User"}</p>
               <p className="text-xs text-muted-foreground">{user?.role || "Unknown Role"}</p>
-              {user?.company_name && (
+              {(user?.companyName || user?.company_name) && (
                 <p className="text-xs text-muted-foreground truncate max-w-[140px]">
-                  {user.company_name}
+                  {user.companyName || user.company_name}
                 </p>
               )}
             </div>
