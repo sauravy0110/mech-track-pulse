@@ -20,6 +20,7 @@ import { FilePlus, Search, Cpu } from "lucide-react";
 import AITaskAssignment from "@/components/tasks/AITaskAssignment";
 import { useToast } from "@/components/ui/use-toast";
 import CreateTaskModal from "@/components/tasks/CreateTaskModal";
+import CreateTaskWithComponents from "@/components/tasks/CreateTaskWithComponents";
 
 const Tasks = () => {
   const { user, isRole } = useAuth();
@@ -29,6 +30,7 @@ const Tasks = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [isAIAssignmentOpen, setIsAIAssignmentOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isComponentModalOpen, setIsComponentModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [localTasks, setLocalTasks] = useState<Task[]>(mockTasks);
   const { toast } = useToast();
@@ -190,10 +192,18 @@ const Tasks = () => {
                   </Button>
                   <Button 
                     className="flex items-center"
+                    onClick={() => setIsComponentModalOpen(true)}
+                  >
+                    <FilePlus className="mr-2 h-4 w-4" />
+                    Create MSME Task
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    className="flex items-center"
                     onClick={() => setIsCreateModalOpen(true)}
                   >
                     <FilePlus className="mr-2 h-4 w-4" />
-                    Create Task
+                    Create Custom Task
                   </Button>
                 </div>
               )}
@@ -251,6 +261,16 @@ const Tasks = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateTask={handleCreateTask}
+      />
+
+      {/* Create MSME Task Modal */}
+      <CreateTaskWithComponents
+        isOpen={isComponentModalOpen}
+        onClose={() => setIsComponentModalOpen(false)}
+        onTaskCreate={(taskData) => {
+          console.log('New MSME task created:', taskData);
+          handleCreateTask(taskData);
+        }}
       />
     </DashboardLayout>
   );
