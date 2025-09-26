@@ -20,7 +20,7 @@ import { FilePlus, Search, Cpu } from "lucide-react";
 import AITaskAssignment from "@/components/tasks/AITaskAssignment";
 import { useToast } from "@/components/ui/use-toast";
 import CreateTaskModal from "@/components/tasks/CreateTaskModal";
-import CreateTaskWithComponents from "@/components/tasks/CreateTaskWithComponents";
+import SimpleMSMETaskCreator from "@/components/tasks/SimpleMSMETaskCreator";
 
 const Tasks = () => {
   const { user, isRole } = useAuth();
@@ -264,7 +264,7 @@ const Tasks = () => {
       />
 
       {/* Create MSME Task Modal */}
-      <CreateTaskWithComponents
+      <SimpleMSMETaskCreator
         isOpen={isComponentModalOpen}
         onClose={() => setIsComponentModalOpen(false)}
         onTaskCreate={(taskData) => {

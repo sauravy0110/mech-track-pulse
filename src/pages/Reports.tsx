@@ -1,5 +1,7 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import MSMEReportGenerator from "@/components/reports/MSMEReportGenerator";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,6 +32,8 @@ import {
 } from "recharts";
 
 const Reports = () => {
+  const { user } = useAuth();
+  
   const [timeRange, setTimeRange] = useState("month");
   
   // Mock time series data for charts
@@ -75,9 +79,9 @@ const Reports = () => {
     <DashboardLayout>
       <div className="mb-8 flex flex-col sm:flex-row gap-4 justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
           <p className="text-muted-foreground mt-1">
-            Analyze performance metrics and trends.
+            Generate comprehensive production reports with AI insights and proof documentation.
           </p>
         </div>
         
@@ -107,6 +111,7 @@ const Reports = () => {
           <TabsTrigger value="operators">Operator Performance</TabsTrigger>
           <TabsTrigger value="tasks">Task Analytics</TabsTrigger>
           <TabsTrigger value="clients">Client Satisfaction</TabsTrigger>
+          <TabsTrigger value="msme">MSME Reports</TabsTrigger>
         </TabsList>
         
         {/* Overview Tab */}
@@ -450,6 +455,11 @@ const Reports = () => {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+        
+        {/* MSME Reports Tab */}
+        <TabsContent value="msme" className="space-y-8">
+          <MSMEReportGenerator userRole={user?.role as any || 'operator'} />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
